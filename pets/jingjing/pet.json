@@ -1,0 +1,155 @@
+{
+  "petManifestVersion": 2,
+  "id": "jingjing",
+  "displayName": "大肥鱼·鲸鲸娘",
+  "description": "来自 zhouwu97/ds-pet 的若叶睦形态大肥鱼（MIT；粉丝二创，非官方）。8×11 Codex 图集适配。",
+  "version": "1.0.0",
+  "author": "zhouwu97",
+  "license": "MIT (c) 2026 zhouwu97",
+  "renderer": "sprite2d",
+  "behaviorPath": "behavior.json",
+  "sprite2d": {
+    "spritesheetPath": "spritesheet.webp",
+    "cell": {
+      "width": 192,
+      "height": 208
+    },
+    "columns": 8,
+    "atlasRows": 11,
+    "frames": [
+      6,
+      8,
+      8,
+      4,
+      5,
+      8,
+      6,
+      6,
+      6,
+      8,
+      8
+    ],
+    "tracks": {
+      "idle": {
+        "durations": [
+          280,
+          280,
+          280,
+          280,
+          280,
+          280
+        ]
+      },
+      "walk-right": {
+        "durations": [
+          180,
+          180,
+          180,
+          180,
+          180,
+          180,
+          180,
+          180
+        ]
+      },
+      "walk-left": {
+        "durations": [
+          180,
+          180,
+          180,
+          180,
+          180,
+          180,
+          180,
+          180
+        ]
+      },
+      "wave": {
+        "durations": [
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "jump": {
+        "durations": [
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "sad": {
+        "durations": [
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "wait": {
+        "durations": [
+          240,
+          240,
+          240,
+          240,
+          240,
+          240
+        ]
+      },
+      "work": {
+        "durations": [
+          200,
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "think": {
+        "durations": [
+          240,
+          240,
+          240,
+          240,
+          240,
+          240
+        ]
+      }
+    }
+  },
+  "sequences": {
+    "idle": [
+      "idle"
+    ],
+    "thinking": [
+      "think"
+    ],
+    "tool": [
+      "work"
+    ],
+    "waiting": [
+      "wait"
+    ],
+    "review": [
+      "think"
+    ],
+    "done": [
+      "jump",
+      "wave",
+      "idle"
+    ],
+    "failed": [
+      "sad",
+      "wait",
+      "idle"
+    ]
+  }
+}

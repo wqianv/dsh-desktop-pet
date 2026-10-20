@@ -1,0 +1,153 @@
+{
+  "petManifestVersion": 2,
+  "id": "yuexinmiao",
+  "displayName": "月薪喵",
+  "description": "来自 LINNoot/dsh-co-pet 的白色办公室小猫（MIT）。8×9 Codex 图集适配。",
+  "version": "1.0.0",
+  "author": "LINNoot/dsh-co-pet contributors",
+  "license": "MIT",
+  "renderer": "sprite2d",
+  "behaviorPath": "behavior.json",
+  "sprite2d": {
+    "spritesheetPath": "spritesheet.webp",
+    "cell": {
+      "width": 192,
+      "height": 208
+    },
+    "columns": 8,
+    "atlasRows": 9,
+    "frames": [
+      6,
+      8,
+      8,
+      4,
+      5,
+      8,
+      6,
+      6,
+      6
+    ],
+    "tracks": {
+      "idle": {
+        "durations": [
+          280,
+          280,
+          280,
+          280,
+          280,
+          280
+        ]
+      },
+      "walk-right": {
+        "durations": [
+          180,
+          180,
+          180,
+          180,
+          180,
+          180,
+          180,
+          180
+        ]
+      },
+      "walk-left": {
+        "durations": [
+          180,
+          180,
+          180,
+          180,
+          180,
+          180,
+          180,
+          180
+        ]
+      },
+      "wave": {
+        "durations": [
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "jump": {
+        "durations": [
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "sad": {
+        "durations": [
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "wait": {
+        "durations": [
+          240,
+          240,
+          240,
+          240,
+          240,
+          240
+        ]
+      },
+      "work": {
+        "durations": [
+          200,
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "think": {
+        "durations": [
+          240,
+          240,
+          240,
+          240,
+          240,
+          240
+        ]
+      }
+    }
+  },
+  "sequences": {
+    "idle": [
+      "idle"
+    ],
+    "thinking": [
+      "think"
+    ],
+    "tool": [
+      "work"
+    ],
+    "waiting": [
+      "wait"
+    ],
+    "review": [
+      "think"
+    ],
+    "done": [
+      "jump",
+      "wave",
+      "idle"
+    ],
+    "failed": [
+      "sad",
+      "wait",
+      "idle"
+    ]
+  }
+}

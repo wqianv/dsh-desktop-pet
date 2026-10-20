@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "animations": {
+    "idle": {
+      "row": 0,
+      "frames": 6,
+      "durations": [
+        280,
+        280,
+        280,
+        280,
+        280,
+        280
+      ],
+      "loop": true
+    },
+    "walk-right": {
+      "row": 1,
+      "frames": 8,
+      "durations": [
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180
+      ],
+      "loop": true
+    },
+    "walk-left": {
+      "row": 2,
+      "frames": 8,
+      "durations": [
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180,
+        180
+      ],
+      "loop": true
+    },
+    "wave": {
+      "row": 3,
+      "frames": 4,
+      "durations": [
+        200,
+        200,
+        200,
+        200
+      ],
+      "loop": false
+    },
+    "jump": {
+      "row": 4,
+      "frames": 5,
+      "durations": [
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "loop": false
+    },
+    "sad": {
+      "row": 5,
+      "frames": 8,
+      "durations": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "loop": false
+    },
+    "wait": {
+      "row": 6,
+      "frames": 6,
+      "durations": [
+        240,
+        240,
+        240,
+        240,
+        240,
+        240
+      ],
+      "loop": true
+    },
+    "work": {
+      "row": 7,
+      "frames": 6,
+      "durations": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "loop": true
+    },
+    "think": {
+      "row": 8,
+      "frames": 6,
+      "durations": [
+        240,
+        240,
+        240,
+        240,
+        240,
+        240
+      ],
+      "loop": true
+    }
+  },
+  "phases": {
+    "idle": {
+      "animation": "idle"
+    },
+    "thinking": {
+      "animation": "think"
+    },
+    "tool": {
+      "animation": "work"
+    },
+    "waiting": {
+      "animation": "wait"
+    },
+    "review": {
+      "animation": "think"
+    },
+    "done": {
+      "sequence": [
+        "jump",
+        "wave",
+        "idle"
+      ]
+    },
+    "failed": {
+      "sequence": [
+        "sad",
+        "wait",
+        "idle"
+      ]
+    }
+  },
+  "bubbles": {
+    "thinking": [
+      "思考中…",
+      "让我想想…"
+    ],
+    "waiting": [
+      "等你确认…"
+    ],
+    "review": [
+      "检查中…"
+    ],
+    "done": [
+      "搞定！",
+      "收工～"
+    ],
+    "failed": [
+      "出问题了…",
+      "要不要看看日志？"
+    ]
+  },
+  "toolLabels": {
+    "shell": "跑命令中…",
+    "edit": "改代码中…",
+    "web": "查资料中…",
+    "read": "读文件…",
+    "agent": "调度子代理…",
+    "mcp": "调工具中…"
+  },
+  "interactions": {
+    "click": {
+      "animations": [
+        "wave"
+      ],
+      "bubbles": [
+        "在呢在呢",
+        "嗯哼～"
+      ]
+    },
+    "drag": null,
+    "idleActions": []
+  },
+  "cost": {
+    "enabled": true,
+    "template": "本轮 {lastAmount} · 本会话 {sessionAmount}",
+    "tokensTemplate": "{tokens} tokens",
+    "delayMs": 700,
+    "ttlMs": 9000
+  }
+}

@@ -1,6 +1,6 @@
 [package]
 name = "dsh-desktop-pet"
-version = "0.6.0"
+version = "0.7.0"
 description = "A true OS-level desktop pet for DeepSeek Harness"
 authors = ["dsh-desktop-pet contributors"]
 license = "MIT"

@@ -5,8 +5,8 @@
 > 技术栈：**Tauri 2 + Rust + 系统 WebView**（不是 Electron；Electron 版只作为最初验证 MVP 留在 `legacy/electron/`）。
 > 已在本机 macOS 26.2 (arm64) 验证：Tauri 2.12 / debug `.app` ~30MB；窗口 280×320、floating layer、置顶；sprite 加载成功（1536×3536）；hover 进入宠物时自动从点击穿透切到可交互；状态经 DSH host 插件桥实时更新。
 
-![pet](docs/pet.png)
-（「吃白饭的蓝色大肥鱼」— 动画来自 [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet)；本项目只做抽帧/裁切/适配，不重绘角色。）
+![支持的桌宠形象](docs/packs.png)
+（默认形象「吃白饭的蓝色大肥鱼」来自 PC2005-cloud/dsh-pet；其余社区形象及许可见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。本项目只做图集/行为适配，不重绘角色。）
 
 ## 功能
 
@@ -19,6 +19,28 @@
 - **余额与高优会话**：host 插件读取 DSH 账户余额；右键/托盘菜单显示余额和「等待确认 / 出错」的高优会话列表，也可以选择不显示。
 - **设置菜单**：右键桌宠或托盘 → **设置**，可以分别开关余额、高优会话、费用气泡、Dock 图标、菜单栏图标和随 DSH 启动。
 - **随 DSH 启动（默认开）**：`dsh-launcher/` host 插件负责拉起/关闭桌宠；托盘/右键菜单可关。
+
+## 自带形象
+
+| id | 名称 | 来源/许可 |
+|---|---|---|
+| `dafeiyu`（默认） | 吃白饭的蓝色大肥鱼 | PC2005-cloud/dsh-pet（素材开源可用、禁商用） |
+| `jingjing` | 大肥鱼·鲸鲸娘 | zhouwu97/ds-pet（MIT） |
+| `whale-pixel` | 鲸鱼娘·像素 | chenthreegold/deepseek-whale-pet（MIT） |
+| `dpsk-girl` | ds 鲸鱼女仆 | LINNoot/dsh-co-pet（MIT） |
+| `yuexinmiao` | 月薪喵 | LINNoot/dsh-co-pet（MIT） |
+| `shenshen` | 深深 | schrieeeffer/shenshen-codex-pet（视觉 CC BY-NC-SA 4.0） |
+
+在 **DSH 设置 → 桌宠 → 形象** 里选，或右键桌宠 → **更换形象**。约 1 秒热切换，不重启。
+
+## 自己做一个
+
+- 规范：[`docs/PET_PACK_SPEC.md`](docs/PET_PACK_SPEC.md)
+- Agent skill（可直接给 Codex / DSH / Claude 等 agent 读）：[`skills/create-dsh-pet/SKILL.md`](skills/create-dsh-pet/SKILL.md)
+- 工具：`python3 tools/import-codex-pet.py --help`、`python3 tools/validate-pet-pack.py --all`
+- 仓库根 [`AGENTS.md`](AGENTS.md) 是给 coding agent 的入口。
+
+一句话流程：生成/收集 **8 列 × 至少 9 行、192×208/格、透明背景**图集 → `import-codex-pet.py` 生成清单 → 补 LICENSE/NOTICE → `validate-pet-pack.py` 校验 → 复制到 `~/.dsh-desktop-pet/pets/` → DSH 设置里刷新选中。
 
 ## 快速开始
 
@@ -275,7 +297,12 @@ renderer/           前端（behavior.json 驱动的雪碧图动画/气泡/交�
 pets/dafeiyu/       默认宠物包（17 行动画图集 + pet.json + behavior.json）
 dsh-launcher/       DSH host 插件（启动器 + 状态/费用桥）
 tools/              抽帧/图集生成、预览图、状态调试 CLI
-docs/BEHAVIOR.md    行为包 schema
+docs/PET_PACK_SPEC.md  宠物包规范（给人类/agent）
+docs/BEHAVIOR.md       行为包 schema
+skills/create-dsh-pet/ Agent Skill：生成/修改桌宠
+AGENTS.md              Agent 入口
+tools/import-codex-pet.py  从 Codex 图集导入
+tools/validate-pet-pack.py 宠物包校验
 legacy/electron/    最初验证 MVP 的 Electron 版（仅对照）
 ```
 
