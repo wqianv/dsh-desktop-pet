@@ -15,6 +15,8 @@
 - **行为 mod**：`pets/<id>/behavior.json` 定义动画表、阶段映射、点击/拖拽互动、挂机小动作、气泡和费用模板；非程序员也能改。
 - **17 段动画**：待机/跑动/挥手/跳跃/出错/等待/干活/思考 + 拖拽/摸头/害羞/打瞌睡/吃白饭/伸懒腰/跳舞/发呆。
 - **费用估算**：每轮 `turn/end` 后按 DeepSeek 峰谷价目算本轮和整段会话的 token 费用，气泡显示 `本轮 ¥x · 本会话 ¥y`。
+- **余额与高优会话**：host 插件读取 DSH 账户余额；右键/托盘菜单显示余额和「等待确认 / 出错」的高优会话列表，也可以选择不显示。
+- **设置菜单**：右键桌宠或托盘 → **设置**，可以分别开关余额、高优会话、费用气泡、Dock 图标、菜单栏图标和随 DSH 启动。
 - **随 DSH 启动（默认开）**：`dsh-launcher/` host 插件负责拉起/关闭桌宠；托盘/右键菜单可关。
 
 ## 快速开始
@@ -154,6 +156,34 @@ Tauri WebviewWindow（透明/无边框/置顶/skipTaskbar）
 9 drag | 10 pet | 11 shy | 12 sleep | 13 eat | 14 stretch | 15 dance | 16 daydream
 ```
 
+## 设置与自定义显示
+
+右键桌宠（或显示后的托盘）→ **设置**：
+
+| 开关 | 默认 | 作用 |
+|---|---|---|
+| 显示余额 | ✅ | 气泡/菜单显示 DSH 账户余额（CNY；未登录/不可用时菜单显示对应状态） |
+| 显示高优会话 | ✅ | 菜单列出 `waiting/failed` 的会话，气泡追加「高优 N」 |
+| 显示费用气泡 | ✅ | 每轮结束显示 `本轮 ¥x · 本会话 ¥y` |
+| 随 DSH 启动 | ✅ | 下次 DSH 启动时自动拉起桌宠 |
+| 显示 Dock 图标 | ❌ | 程序坞图标 |
+| 显示菜单栏图标 | ❌ | 右上角托盘图标；隐藏后右键桌宠仍可控制 |
+
+全部持久化到 `~/.dsh-desktop-pet/settings.json`：
+
+```json
+{
+  "autoStart": true,
+  "showDockIcon": false,
+  "showTrayIcon": false,
+  "showBalance": true,
+  "showPrioritySessions": true,
+  "showCost": true
+}
+```
+
+余额由 `dsh-launcher` host 插件通过 DSH 的 `deepseekAccount.getBalance()` 获取，启动后 1.2s 拉一次、之后每 60s / 每轮结束刷新；不会把账户密钥写到本地。余额/高优会话也可以只在右键菜单看，气泡里不想显示就关掉对应开关。
+
 ## 随 DSH 启动（默认开启）
 
 `dsh-launcher/` 是 DSH host 插件：**默认随 DSH 启动桌宠**（`autoStart` 默认 `true`）。开关方式：
@@ -189,6 +219,9 @@ DSH 启动时插件会自动拉起桌宠；DSH 退出时关掉，DSH 被强杀�
   "autoStart": true,
   "showDockIcon": true,
   "showTrayIcon": true,
+  "showBalance": true,
+  "showPrioritySessions": true,
+  "showCost": true,
   "icons": { "app": "icons/my-icon.png", "tray": "icons/my-tray.png" }
 }
 ```

@@ -22,7 +22,7 @@ DSH host 插件：**随 DSH 启动桌宠** + **把 DSH 会话状态/费用写到
 ## 设置文件
 
 ```json
-{ "autoStart": true, "showDockIcon": false, "showTrayIcon": false, "icons": { "app": null, "tray": null } }
+{ "autoStart": true, "showDockIcon": false, "showTrayIcon": false, "showBalance": true, "showPrioritySessions": true, "showCost": true, "icons": { "app": null, "tray": null } }
 ```
 
 路径：`~/.dsh-desktop-pet/settings.json`。默认不存在 = `autoStart:true`；`showDockIcon/showTrayIcon` 默认 false（不显示图标，右键桌宠可打开）。如果右键菜单打不开，手动把这两个字段改成 true 再重启桌宠。
@@ -37,7 +37,38 @@ DSH host 插件：**随 DSH 启动桌宠** + **把 DSH 会话状态/费用写到
 
 桌宠 Rust 侧优先读这个文件（<30s 新鲜），bridge 不在时自动回退 JSONL。心跳每 10s 一次；写入 40ms 防抖，原子 rename。
 
-字段与桌宠 `PetState` 一致：`phase`、`toolFamily`、`activeCount`、`sessions[]`、可选 `cost`、`updatedAt`。
+字段与桌宠 `PetState` 一致：`phase`、`toolFamily`、`activeCount`、`sessions[]`、可选 `cost`、可选 `account`、`updatedAt`。
+
+## 余额
+
+启动后 1.2s、之后每 60s 和每轮 `turn/end`，调用：
+
+```js
+ctx.get('deepseekAccount').getBalance({
+  version: '0.2.1-rc.2',
+  locale: 'zh-CN',
+  timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
+})
+```
+
+结果写入 `state.json` 的 `account` 字段（`status: ready/signed-out/failed/unavailable`，`wallets/bonusWallets`）。不保存账户密钥、不联网。
+
+## 设置
+
+`~/.dsh-desktop-pet/settings.json` 控制显示内容：
+
+```json
+{
+  "autoStart": true,
+  "showDockIcon": false,
+  "showTrayIcon": false,
+  "showBalance": true,
+  "showPrioritySessions": true,
+  "showCost": true
+}
+```
+
+由桌宠右键菜单/托盘的 **设置** 子菜单改写；插件只读 `autoStart`，其余由桌宠读取。
 
 ## 费用
 

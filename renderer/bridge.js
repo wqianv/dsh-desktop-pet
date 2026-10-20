@@ -23,6 +23,14 @@
 
     getBootstrap: () => invoke('bootstrap'),
 
+    getSettings: () => invoke('get_settings'),
+
+    onSettings(callback) {
+      if (listen) {
+        listen('pet:settings', (event) => callback(event.payload)).catch(() => {})
+      }
+    },
+
     onState(callback) {
       // 双保险：事件推送（若 capability 允许）+ 600ms 轮询（不依赖事件权限）。
       if (listen) {
@@ -55,7 +63,9 @@
     dragEnd() {},
 
     showContextMenu() {
-      invoke('show_context_menu').catch(() => {})
+      invoke('show_context_menu').catch((e) => {
+        if (this.log) this.log(`context menu failed: ${e}`)
+      })
     },
 
     reloadPacks() {

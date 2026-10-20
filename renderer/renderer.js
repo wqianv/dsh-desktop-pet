@@ -64,6 +64,7 @@ let packs = []
 let activePack = null
 let behavior = DEFAULT_BEHAVIOR
 let state = { phase: 'idle', activeCount: 0, toolFamily: null }
+let displaySettings = { showBalance: true, showPrioritySessions: true, showCost: true }
 let frameTimer = null
 let playToken = 0
 let bubbleTimer = null
@@ -270,6 +271,47 @@ function showBubble(text, ttlMs) {
   if (ttlMs > 0) bubbleTimer = setTimeout(hideBubble, ttlMs)
 }
 
+function prioritySessions() {
+  const sessions = Array.isArray(state.sessions) ? state.sessions : []
+  return sessions.filter((session) => session.phase === 'waiting' || session.phase === 'failed')
+}
+
+function balanceText() {
+  const account = state && state.account
+  if (!account || account.status !== 'ready') return ''
+  let cny = 0
+  let usd = 0
+  for (const key of ['wallets', 'bonusWallets']) {
+    const wallets = Array.isArray(account[key]) ? account[key] : []
+    for (const wallet of wallets) {
+      const amount = Number.parseFloat(wallet && wallet.balance)
+      if (!Number.isFinite(amount)) continue
+      if (wallet.currency === 'CNY') cny += amount
+      if (wallet.currency === 'USD') usd += amount
+    }
+  }
+  if (cny > 0 || usd === 0) return `余额 ¥${cny.toFixed(2)}`
+  return `余额 $${usd.toFixed(2)}`
+}
+
+function displayExtras() {
+  const parts = []
+  if (displaySettings.showBalance) {
+    const text = balanceText()
+    if (text) parts.push(text)
+  }
+  if (displaySettings.showPrioritySessions) {
+    const count = prioritySessions().length
+    if (count > 0) parts.push(`高优 ${count}`)
+  }
+  return parts
+}
+
+function withExtras(text) {
+  const extras = displayExtras()
+  return extras.length ? `${text} · ${extras.join(' · ')}` : text
+}
+
 function bubbleTextForPhase(current) {
   const phase = current.phase || 'idle'
   if (phase === 'tool') {
@@ -282,7 +324,7 @@ function bubbleTextForPhase(current) {
 
 function showBubbleForPhase(current) {
   if (interactionActive || dragAnim) return
-  const text = bubbleTextForPhase(current)
+  const text = withExtras(bubbleTextForPhase(current))
   if (!text) {
     hideBubble()
     return
@@ -306,6 +348,7 @@ function formatCost(cost) {
 
 function maybeShowCost(prev, next) {
   const cfg = behavior.cost
+  if (!displaySettings.showCost) return
   if (!cfg || cfg.enabled === false) return
   const cost = next && next.cost
   const at = cost && ((cost.lastTurn && cost.lastTurn.at) || cost.at)
@@ -314,8 +357,9 @@ function maybeShowCost(prev, next) {
   const delay = Number(cfg.delayMs) || 700
   setTimeout(() => {
     if (interactionActive || dragAnim || !cost) return
-    if (window.petAPI && window.petAPI.log) window.petAPI.log(`cost bubble ${formatCost(cost)}`)
-    showBubble(formatCost(cost), Number(cfg.ttlMs) || 9000)
+    const text = withExtras(formatCost(cost))
+    if (window.petAPI && window.petAPI.log) window.petAPI.log(`cost bubble ${text}`)
+    showBubble(text, Number(cfg.ttlMs) || 9000)
   }, delay)
 }
 
@@ -564,6 +608,7 @@ function applyPack(pack) {
 
 async function boot() {
   bootstrap = await window.petAPI.getBootstrap()
+  displaySettings = { ...displaySettings, ...(bootstrap.settings || {}) }
   packs = bootstrap.packs || []
   state = bootstrap.state || { phase: 'idle', activeCount: 0 }
   setPetSize(bootstrap.config.size)
@@ -585,6 +630,12 @@ async function boot() {
     const next = packById(activePack && activePack.id) || packs[0]
     if (next) applyPack(next)
   })
+  if (window.petAPI.onSettings) {
+    window.petAPI.onSettings((next) => {
+      displaySettings = { ...displaySettings, ...(next || {}) }
+      if (!interactionActive && !dragAnim) showBubbleForPhase(state)
+    })
+  }
   window.petAPI.onReaction(() => reactToClick())
 }
 

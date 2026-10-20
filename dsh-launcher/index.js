@@ -332,6 +332,10 @@ export function apply(ctx) {
   let writeTimer = null
   let idleTimers = new Map()
   let costRequestToken = 0
+  let account = { status: 'loading', updatedAt: Date.now() }
+  let balancePromise = null
+  let balanceTimer = null
+  let balanceInitialTimer = null
   const sessions = new Map()
 
   function ensure(sessionId) {
@@ -375,6 +379,44 @@ export function apply(ctx) {
     idleTimers.set(session.id, timer)
   }
 
+  async function refreshBalance() {
+    if (balancePromise) return balancePromise
+    balancePromise = (async () => {
+      try {
+        const service = safeGet(ctx, 'deepseekAccount')
+        if (!service || typeof service.getBalance !== 'function') {
+          account = { status: 'unavailable', updatedAt: Date.now() }
+          return
+        }
+        const now = new Date()
+        const result = await service.getBalance({
+          version: '0.2.1-rc.2',
+          locale: 'zh-CN',
+          timezoneOffsetSeconds: -now.getTimezoneOffset() * 60,
+        })
+        if (!result) {
+          account = { status: 'signed-out', updatedAt: Date.now() }
+        } else if (result.status !== 'ready') {
+          account = { status: 'failed', updatedAt: Date.now() }
+        } else {
+          account = {
+            status: 'ready',
+            wallets: result.value || [],
+            bonusWallets: result.bonusWallets || [],
+            updatedAt: Date.now(),
+          }
+        }
+      } catch (err) {
+        console.warn('[dsh-pet] balance failed:', err && err.message)
+        account = { status: 'failed', updatedAt: Date.now() }
+      } finally {
+        balancePromise = null
+        scheduleWrite()
+      }
+    })()
+    return balancePromise
+  }
+
   function snapshot(now) {
     const all = [...sessions.values()]
       .filter((session) => session.lastEventAt > 0)
@@ -415,6 +457,7 @@ export function apply(ctx) {
         lastEventAt: s.lastEventAt,
       })),
       ...(costs.length ? { cost: costs[0] } : {}),
+      account,
       updatedAt: now,
     }
   }
@@ -490,6 +533,13 @@ export function apply(ctx) {
     const data = event.data || {}
     const at = typeof event.time === 'number' && Number.isFinite(event.time) ? event.time : Date.now()
     const view = ensure(session.id)
+    try {
+      const titleService = safeGet(ctx, 'sessionTitle')
+      const snapshot = titleService && typeof titleService.get === 'function' ? titleService.get(session) : undefined
+      if (snapshot && typeof snapshot.title === 'string' && snapshot.title) view.title = snapshot.title
+    } catch {
+      /* title 服务不可用时忽略 */
+    }
     const depth = session.header?.delegationDepth
     if (typeof depth === 'number' && Number.isFinite(depth)) view.depth = depth
     view.lastEventAt = at
@@ -546,6 +596,7 @@ export function apply(ctx) {
         const turn = typeof data.turn === 'number' ? data.turn : view.turn
         scheduleIdle(view, view.phase === 'done' ? 8000 : 15000, view.phase)
         computeCost(view, turn, at)
+        refreshBalance()
         break
       }
       default:
@@ -568,6 +619,10 @@ export function apply(ctx) {
     // 心跳：state.json 保持新鲜，桌宠据此判断 bridge 是否还活着。
     const heartbeat = setInterval(() => scheduleWrite(), 10000)
     heartbeat.unref?.()
+    balanceInitialTimer = setTimeout(() => refreshBalance(), 1200)
+    balanceInitialTimer.unref?.()
+    balanceTimer = setInterval(() => refreshBalance(), 60000)
+    balanceTimer.unref?.()
     console.log('[dsh-pet] bridge ready:', STATE_FILE)
     ctx.effect(() => () => {
       disposed = true
@@ -578,6 +633,8 @@ export function apply(ctx) {
         /* ignore */
       }
       clearInterval(heartbeat)
+      if (balanceTimer) clearInterval(balanceTimer)
+      if (balanceInitialTimer) clearTimeout(balanceInitialTimer)
       for (const timer of idleTimers.values()) clearTimeout(timer)
       idleTimers.clear()
       if (writeTimer) clearTimeout(writeTimer)

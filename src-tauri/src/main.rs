@@ -17,7 +17,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::menu::{CheckMenuItem, Menu, MenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
@@ -121,6 +121,9 @@ struct PetSettings {
     auto_start: bool,
     show_dock_icon: bool,
     show_tray_icon: bool,
+    show_balance: bool,
+    show_priority_sessions: bool,
+    show_cost: bool,
     icons: IconSettings,
 }
 
@@ -131,9 +134,34 @@ impl Default for PetSettings {
             auto_start: true,
             show_dock_icon: false,
             show_tray_icon: false,
+            show_balance: true,
+            show_priority_sessions: true,
+            show_cost: true,
             icons: IconSettings::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DisplaySettings {
+    show_balance: bool,
+    show_priority_sessions: bool,
+    show_cost: bool,
+}
+
+impl From<&PetSettings> for DisplaySettings {
+    fn from(settings: &PetSettings) -> Self {
+        Self {
+            show_balance: settings.show_balance,
+            show_priority_sessions: settings.show_priority_sessions,
+            show_cost: settings.show_cost,
+        }
+    }
+}
+
+fn emit_display_settings(app: &AppHandle) {
+    let _ = app.emit("pet:settings", DisplaySettings::from(&read_settings()));
 }
 
 fn settings_dir() -> PathBuf {
@@ -455,6 +483,8 @@ struct PetState {
     sessions: Vec<SessionView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cost: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    account: Option<Value>,
     updated_at: u64,
 }
 
@@ -466,6 +496,7 @@ impl Default for PetState {
             active_count: 0,
             sessions: Vec::new(),
             cost: None,
+            account: None,
             updated_at: 0,
         }
     }
@@ -825,6 +856,7 @@ fn collect_state() -> PetState {
         active_count,
         sessions,
         cost: None,
+        account: None,
         updated_at: now,
     }
 }
@@ -875,6 +907,7 @@ struct Bootstrap {
     config: Config,
     packs: Vec<PackView>,
     state: PetState,
+    settings: DisplaySettings,
     is_dev: bool,
 }
 
@@ -885,8 +918,14 @@ fn bootstrap() -> Bootstrap {
         config: read_config(),
         packs: load_packs(),
         state: collect_state(),
+        settings: DisplaySettings::from(&read_settings()),
         is_dev: cfg!(debug_assertions),
     }
+}
+
+#[tauri::command]
+fn get_settings() -> DisplaySettings {
+    DisplaySettings::from(&read_settings())
 }
 
 #[tauri::command]
@@ -894,32 +933,156 @@ fn reload_packs() -> Vec<PackView> {
     load_packs()
 }
 
+fn balance_text(account: Option<&Value>) -> String {
+    let Some(account) = account else {
+        return "余额 未加载".into();
+    };
+    let status = account.get("status").and_then(Value::as_str).unwrap_or("");
+    if status != "ready" {
+        return if status == "signed-out" { "余额 未登录".into() } else { "余额 不可用".into() };
+    }
+    let mut cny = 0.0f64;
+    let mut usd = 0.0f64;
+    for key in ["wallets", "bonusWallets"] {
+        let Some(list) = account.get(key).and_then(Value::as_array) else {
+            continue;
+        };
+        for wallet in list {
+            let currency = wallet.get("currency").and_then(Value::as_str).unwrap_or("");
+            let value = wallet
+                .get("balance")
+                .and_then(Value::as_str)
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.0);
+            match currency {
+                "CNY" => cny += value,
+                "USD" => usd += value,
+                _ => {}
+            }
+        }
+    }
+    if cny > 0.0 || usd == 0.0 {
+        format!("余额 ¥{cny:.2}")
+    } else {
+        format!("余额 ${usd:.2}")
+    }
+}
+
+fn priority_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<tauri::Wry>> {
+    let state = collect_state();
+    let mut priority: Vec<&SessionView> = state
+        .sessions
+        .iter()
+        .filter(|session| session.phase == "waiting" || session.phase == "failed")
+        .collect();
+    priority.sort_by_key(|session| if session.phase == "waiting" { 0 } else { 1 });
+    priority.truncate(5);
+
+    let mut items: Vec<MenuItem<tauri::Wry>> = Vec::new();
+    if priority.is_empty() {
+        items.push(MenuItem::with_id(
+            app,
+            format!("{prefix}-prio-empty"),
+            "无高优会话",
+            false,
+            None::<&str>,
+        )?);
+    } else {
+        for (index, session) in priority.iter().enumerate() {
+            let title = if session.title.trim().is_empty() {
+                let suffix = &session.session_id[session.session_id.len().saturating_sub(6)..];
+                format!("会话 {suffix}")
+            } else {
+                session.title.chars().take(42).collect()
+            };
+            let phase = if session.phase == "waiting" { "等待确认" } else { "出错" };
+            items.push(MenuItem::with_id(
+                app,
+                format!("{prefix}-prio-{index}"),
+                format!("{phase} · {title}"),
+                false,
+                None::<&str>,
+            )?);
+        }
+    }
+    let refs: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = items.iter().map(|item| item as &dyn tauri::menu::IsMenuItem<tauri::Wry>).collect();
+    Submenu::with_items(app, format!("高优会话 ({})", priority.len()), true, &refs)
+}
+
+fn settings_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<tauri::Wry>> {
+    let settings = read_settings();
+    let balance = CheckMenuItem::with_id(app, format!("{prefix}-balance"), "显示余额", true, settings.show_balance, None::<&str>)?;
+    let priority = CheckMenuItem::with_id(app, format!("{prefix}-priority"), "显示高优会话", true, settings.show_priority_sessions, None::<&str>)?;
+    let cost = CheckMenuItem::with_id(app, format!("{prefix}-cost"), "显示费用气泡", true, settings.show_cost, None::<&str>)?;
+    let autostart = CheckMenuItem::with_id(app, format!("{prefix}-autostart"), "随 DSH 启动", true, settings.auto_start, None::<&str>)?;
+    let dock = CheckMenuItem::with_id(app, format!("{prefix}-dock"), "显示 Dock 图标", true, settings.show_dock_icon, None::<&str>)?;
+    let tray = CheckMenuItem::with_id(app, format!("{prefix}-tray"), "显示菜单栏图标", true, settings.show_tray_icon, None::<&str>)?;
+    Submenu::with_items(
+        app,
+        "设置",
+        true,
+        &[&balance, &priority, &cost, &autostart, &dock, &tray],
+    )
+}
+
+fn toggle_setting(app: &AppHandle, key: &str) {
+    let mut settings = read_settings();
+    match key {
+        "balance" => settings.show_balance = !settings.show_balance,
+        "priority" => settings.show_priority_sessions = !settings.show_priority_sessions,
+        "cost" => settings.show_cost = !settings.show_cost,
+        "autostart" => settings.auto_start = !settings.auto_start,
+        "dock" => settings.show_dock_icon = !settings.show_dock_icon,
+        "tray" => settings.show_tray_icon = !settings.show_tray_icon,
+        _ => return,
+    }
+    write_settings(&settings);
+    rebuild_tray(app);
+    apply_visibility(app, &settings);
+    emit_display_settings(app);
+    log_msg(&format!("settings toggled: {key} -> {settings:?}"));
+}
+
 #[tauri::command]
 fn show_context_menu(window: WebviewWindow) -> Result<(), String> {
+    log_msg("show_context_menu invoked");
     let settings = read_settings();
-    let visible = settings.show_dock_icon || settings.show_tray_icon;
-    let show_icons = CheckMenuItem::with_id(
+    let state = collect_state();
+    let settings_menu = settings_submenu(window.app_handle(), "ctx-set").map_err(|e| e.to_string())?;
+    let priority_menu = priority_submenu(window.app_handle(), "ctx").map_err(|e| e.to_string())?;
+    let balance_item = MenuItem::with_id(
+        &window,
+        "ctx-balance",
+        balance_text(state.account.as_ref()),
+        false,
+        None::<&str>,
+    )
+    .map_err(|e| e.to_string())?;
+    let show_icons = MenuItem::with_id(
         &window,
         "ctx-icons",
         "显示图标（Dock + 菜单栏）",
         true,
-        visible,
         None::<&str>,
     )
     .map_err(|e| e.to_string())?;
-    let auto_start = CheckMenuItem::with_id(
-        &window,
-        "ctx-autostart",
-        "随 DSH 启动",
-        true,
-        settings.auto_start,
-        None::<&str>,
-    )
-    .map_err(|e| e.to_string())?;
+    let open_dsh_item = MenuItem::with_id(&window, "ctx-open-dsh", "打开 DSH", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
     let quit = MenuItem::with_id(&window, "ctx-quit", "退出", true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let menu = Menu::with_items(&window, &[&show_icons, &auto_start, &quit])
-        .map_err(|e| e.to_string())?;
+
+    let mut items: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = Vec::new();
+    if settings.show_balance {
+        items.push(&balance_item);
+    }
+    if settings.show_priority_sessions {
+        items.push(&priority_menu);
+    }
+    items.push(&settings_menu);
+    items.push(&show_icons);
+    items.push(&open_dsh_item);
+    items.push(&quit);
+    let menu = Menu::with_items(&window, &items).map_err(|e| e.to_string())?;
     log_msg("context menu shown");
     window.popup_menu(&menu).map_err(|e| e.to_string())
 }
@@ -946,10 +1109,14 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
-#[tauri::command]
-fn open_dsh() {
+fn open_dsh_url() {
     let config = read_config();
     let _ = std::process::Command::new("open").arg(config.dsh_url).status();
+}
+
+#[tauri::command]
+fn open_dsh() {
+    open_dsh_url();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1077,51 +1244,36 @@ fn apply_icons(app: &AppHandle) {
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let settings = read_settings();
+    let state = collect_state();
+    let settings_menu = settings_submenu(app, "set")?;
+    let priority_menu = priority_submenu(app, "tray")?;
+    let balance_item = MenuItem::with_id(
+        app,
+        "tray-balance",
+        balance_text(state.account.as_ref()),
+        false,
+        None::<&str>,
+    )?;
     let toggle = MenuItem::with_id(app, "toggle", "显示 / 隐藏", true, None::<&str>)?;
-    let auto_start = CheckMenuItem::with_id(
-        app,
-        "auto-start",
-        "随 DSH 启动（下次启动生效）",
-        true,
-        settings.auto_start,
-        None::<&str>,
-    )?;
-    let show_dock = CheckMenuItem::with_id(
-        app,
-        "show-dock",
-        "显示 Dock 图标",
-        true,
-        settings.show_dock_icon,
-        None::<&str>,
-    )?;
-    let show_tray = CheckMenuItem::with_id(
-        app,
-        "show-tray",
-        "显示菜单栏图标",
-        true,
-        settings.show_tray_icon,
-        None::<&str>,
-    )?;
-    let auto_start_item = auto_start.clone();
-    let show_dock_item = show_dock.clone();
-    let show_tray_item = show_tray.clone();
     let reload_icons = MenuItem::with_id(app, "reload-icons", "重载自定义图标", true, None::<&str>)?;
     let open_icons = MenuItem::with_id(app, "open-icons", "打开图标目录…", true, None::<&str>)?;
     let recenter = MenuItem::with_id(app, "recenter", "移到当前屏幕", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(
-        app,
-        &[
-            &show_dock,
-            &show_tray,
-            &auto_start,
-            &reload_icons,
-            &open_icons,
-            &toggle,
-            &recenter,
-            &quit,
-        ],
-    )?;
+
+    let mut items: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = Vec::new();
+    if settings.show_balance {
+        items.push(&balance_item);
+    }
+    if settings.show_priority_sessions {
+        items.push(&priority_menu);
+    }
+    items.push(&settings_menu);
+    items.push(&toggle);
+    items.push(&reload_icons);
+    items.push(&open_icons);
+    items.push(&recenter);
+    items.push(&quit);
+    let menu = Menu::with_items(app, &items)?;
 
     let custom_tray = load_icon_bytes("tray");
     let icon = match custom_tray.as_ref() {
@@ -1132,55 +1284,38 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id("pet-tray")
         .icon(icon)
         .menu(&menu)
-        .on_menu_event(move |app, event| match event.id().as_ref() {
-            "quit" => app.exit(0),
-            "auto-start" => {
-                let mut settings = read_settings();
-                settings.auto_start = !settings.auto_start;
-                write_settings(&settings);
-                let _ = auto_start_item.set_checked(settings.auto_start);
-                log_msg(&format!(
-                    "settings: autoStart={} (takes effect next DSH start)",
-                    settings.auto_start
-                ));
+        .on_menu_event(move |app, event| {
+            let id = event.id().as_ref();
+            if let Some(key) = id.strip_prefix("set-") {
+                toggle_setting(app, key);
+                return;
             }
-            "show-dock" => {
-                let mut settings = read_settings();
-                settings.show_dock_icon = !settings.show_dock_icon;
-                write_settings(&settings);
-                let _ = show_dock_item.set_checked(settings.show_dock_icon);
-                apply_visibility(app, &settings);
-            }
-            "show-tray" => {
-                let mut settings = read_settings();
-                settings.show_tray_icon = !settings.show_tray_icon;
-                write_settings(&settings);
-                let _ = show_tray_item.set_checked(settings.show_tray_icon);
-                apply_visibility(app, &settings);
-            }
-            "reload-icons" => apply_icons(app),
-            "open-icons" => {
-                let dir = settings_dir().join("icons");
-                let _ = fs::create_dir_all(&dir);
-                let _ = Command::new("open").arg(&dir).status();
-            }
-            "toggle" => {
-                if let Some(window) = app.get_webview_window("pet") {
-                    if window.is_visible().unwrap_or(false) {
-                        let _ = window.hide();
-                    } else {
-                        let _ = window.show();
-                        let _ = window.set_always_on_top(true);
+            match id {
+                "quit" => app.exit(0),
+                "reload-icons" => apply_icons(app),
+                "open-icons" => {
+                    let dir = settings_dir().join("icons");
+                    let _ = fs::create_dir_all(&dir);
+                    let _ = Command::new("open").arg(&dir).status();
+                }
+                "toggle" => {
+                    if let Some(window) = app.get_webview_window("pet") {
+                        if window.is_visible().unwrap_or(false) {
+                            let _ = window.hide();
+                        } else {
+                            let _ = window.show();
+                            let _ = window.set_always_on_top(true);
+                        }
                     }
                 }
-            }
-            "recenter" => {
-                if let Some(window) = app.get_webview_window("pet") {
-                    let _ = window.show();
-                    position_window(&window);
+                "recenter" => {
+                    if let Some(window) = app.get_webview_window("pet") {
+                        let _ = window.show();
+                        position_window(&window);
+                    }
                 }
+                _ => {}
             }
-            _ => {}
         })
         .build(app)?;
     Ok(())
@@ -1207,27 +1342,26 @@ fn main() {
     }
 
     tauri::Builder::default()
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "ctx-icons" => {
-                let mut settings = read_settings();
-                let visible = settings.show_dock_icon || settings.show_tray_icon;
-                settings.show_dock_icon = !visible;
-                settings.show_tray_icon = !visible;
-                write_settings(&settings);
-                rebuild_tray(app);
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            if let Some(key) = id.strip_prefix("ctx-set-") {
+                toggle_setting(app, key);
+                return;
             }
-            "ctx-autostart" => {
-                let mut settings = read_settings();
-                settings.auto_start = !settings.auto_start;
-                write_settings(&settings);
-                rebuild_tray(app);
-                log_msg(&format!(
-                    "settings: autoStart={} (takes effect next DSH start)",
-                    settings.auto_start
-                ));
+            match id {
+                "ctx-icons" => {
+                    let mut settings = read_settings();
+                    let visible = settings.show_dock_icon || settings.show_tray_icon;
+                    settings.show_dock_icon = !visible;
+                    settings.show_tray_icon = !visible;
+                    write_settings(&settings);
+                    rebuild_tray(app);
+                    emit_display_settings(app);
+                }
+                "ctx-open-dsh" => open_dsh_url(),
+                "ctx-quit" => app.exit(0),
+                _ => {}
             }
-            "ctx-quit" => app.exit(0),
-            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             bootstrap,
@@ -1235,6 +1369,7 @@ fn main() {
             poll_state,
             frontend_ready,
             frontend_log,
+            get_settings,
             set_ignore,
             show_context_menu,
             start_drag,
