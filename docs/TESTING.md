@@ -53,6 +53,16 @@ CI 在 `.github/workflows/ci.yml`：`validate-pet-pack --all` + JS `node --check
 | 多显示器 | 拖到另一块屏 | 不跑到屏幕外；托盘“移到当前屏幕” |
 | DSH 重启时宠物在跑 | 手动开着宠物重启 DSH | 不出现空窗（5 秒兜底拉起） |
 
+## 3.5 Release 构建检查
+
+```bash
+export RUSTUP_HOME=... CARGO_HOME=... PATH=...
+node_modules/.bin/tauri build --bundles app
+# 产物：src-tauri/target/release/bundle/macos/DSH Pet.app
+```
+
+本机 0.8.0 已验证 release `.app` 可启动（11.19 MiB，sprite/behavior 正常加载）。未签名/未公证，Gatekeeper 仍会拦；这是对外分发前必须补的。
+
 ## 4. Beta（真给别人用）
 
 至少找一台**另一台 Mac** / 另一个 macOS 用户：
@@ -67,7 +77,7 @@ CI 在 `.github/workflows/ci.yml`：`validate-pet-pack --all` + JS `node --check
 
 当前版本仍是**开发者版**，新用户需要自己编译。真正对外分发前还要做：
 
-- [ ] `npm run build:release` 产出 release `.app`
+- [x] `npm run build:release` 产出 release `.app`（本机 0.8.0 验证：11.19 MiB，可直接启动）
 - [ ] 代码签名 + notarization（否则 Gatekeeper 会拦）
 - [ ] 提供 release 下载 / 安装说明（不要求用户装 Rust）
 - [ ] 插件安装可以继续用 DSH 的本地目录，或发布 npm/GitHub release
