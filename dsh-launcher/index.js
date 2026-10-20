@@ -15,7 +15,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const name = 'dsh-desktop-pet-launcher'
-export const inject = []
+export const inject = ['webServer', 'connection']
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT = path.resolve(HERE, '..')
