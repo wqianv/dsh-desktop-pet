@@ -37,6 +37,10 @@ const DEFAULT_PET_SETTINGS = {
 
 const APP_CANDIDATES = [
   process.env.DSH_PET_APP,
+  // 分发包：插件旁边就是 DSH Pet.app
+  path.join(PROJECT, 'DSH Pet.app'),
+  path.join(PROJECT, 'macos', 'DSH Pet.app'),
+  // 开发仓库
   path.join(PROJECT, 'src-tauri', 'target', 'release', 'bundle', 'macos', 'DSH Pet.app'),
   path.join(PROJECT, 'src-tauri', 'target', 'debug', 'bundle', 'macos', 'DSH Pet.app'),
   path.join(os.homedir(), 'Applications', 'DSH Pet.app'),
@@ -102,7 +106,14 @@ function launchPet() {
     return false
   }
   try {
-    const env = { ...process.env, DSH_PET_MANAGED: '1' }
+    const env = {
+      ...process.env,
+      DSH_PET_MANAGED: '1',
+      // 分发包：packs/config/log 由插件指向解压目录与用户数据目录，不依赖构建机路径。
+      DSH_PET_ROOT: PROJECT,
+      DSH_PET_CONFIG: path.join(os.homedir(), '.dsh-desktop-pet', 'config.json'),
+      DSH_PET_LOG: path.join(os.homedir(), '.dsh-desktop-pet', 'pet.log'),
+    }
     delete env.ELECTRON_RUN_AS_NODE
     const child = spawn(appBinary(app), [], { env, stdio: 'ignore', detached: true })
     child.unref()
@@ -441,10 +452,15 @@ function listPacks() {
 function activePackId(packs) {
   const settings = readPetSettings()
   if (typeof settings.packId === 'string' && settings.packId) return settings.packId
-  try {
-    const config = JSON.parse(readFileSync(path.join(PROJECT, '.userdata', 'config.json'), 'utf8'))
-    if (typeof config.packId === 'string' && config.packId) return config.packId
-  } catch {}
+  for (const configPath of [
+    path.join(PROJECT, '.userdata', 'config.json'),
+    path.join(os.homedir(), '.dsh-desktop-pet', 'config.json'),
+  ]) {
+    try {
+      const config = JSON.parse(readFileSync(configPath, 'utf8'))
+      if (typeof config.packId === 'string' && config.packId) return config.packId
+    } catch {}
+  }
   return packs[0]?.id || null
 }
 

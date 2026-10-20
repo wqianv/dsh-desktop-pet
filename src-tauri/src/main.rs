@@ -57,6 +57,24 @@ impl Default for Config {
 }
 
 fn project_root() -> PathBuf {
+    // 分发包：插件用 DSH_PET_ROOT 指向解压目录；手动双击时从 .app 位置推断父目录。
+    if let Ok(root) = std::env::var("DSH_PET_ROOT") {
+        if !root.is_empty() {
+            return PathBuf::from(root);
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let mut cur = exe.as_path();
+        while let Some(parent) = cur.parent() {
+            if parent.extension().and_then(|s| s.to_str()) == Some("app") {
+                return parent
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| parent.to_path_buf());
+            }
+            cur = parent;
+        }
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .map(Path::to_path_buf)
