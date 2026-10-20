@@ -17,9 +17,16 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+
+#[cfg(target_os = "macos")]
+use objc2::{AnyThread, MainThreadMarker};
+#[cfg(target_os = "macos")]
+use objc2_app_kit::{NSApplication, NSImage};
+#[cfg(target_os = "macos")]
+use objc2_foundation::NSData;
 
 const DEFAULT_FRAMES: [u32; 9] = [6, 8, 8, 4, 5, 8, 6, 6, 6];
 
@@ -41,7 +48,7 @@ struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            pack_id: "whale".into(),
+            pack_id: "dafeiyu".into(),
             size: 210,
             x: None,
             y: None,
@@ -95,6 +102,153 @@ fn write_config(config: &Config) {
     if let Ok(text) = serde_json::to_string_pretty(config) {
         let _ = fs::write(path, text);
     }
+}
+
+/* ------------------------------------------------------------------ */
+/* 共享设置（autoStart / 自定义图标）                                   */
+/* ------------------------------------------------------------------ */
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct IconSettings {
+    app: Option<String>,
+    tray: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct PetSettings {
+    auto_start: bool,
+    icons: IconSettings,
+}
+
+fn settings_dir() -> PathBuf {
+    home_dir().join(".dsh-desktop-pet")
+}
+
+fn settings_path() -> PathBuf {
+    settings_dir().join("settings.json")
+}
+
+fn read_settings() -> PetSettings {
+    fs::read_to_string(settings_path())
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn write_settings(settings: &PetSettings) {
+    let _ = fs::create_dir_all(settings_dir());
+    if let Ok(text) = serde_json::to_string_pretty(settings) {
+        let temp = settings_path().with_extension("tmp");
+        if fs::write(&temp, text).is_ok() {
+            let _ = fs::rename(temp, settings_path());
+        }
+    }
+}
+
+/// 自定义图标的查找顺序：settings 里显式路径 → ~/.dsh-desktop-pet/icons/<kind>.png
+/// → 当前宠物包目录的 <kind>.png。找不到就沿用内置图标（我们自己画的那套）。
+fn configured_icon_path(kind: &str) -> Option<PathBuf> {
+    let settings = read_settings();
+    let configured = if kind == "app" {
+        settings.icons.app
+    } else {
+        settings.icons.tray
+    };
+    if let Some(value) = configured {
+        let candidate = PathBuf::from(value);
+        let resolved = if candidate.is_absolute() {
+            candidate
+        } else {
+            settings_dir().join(candidate)
+        };
+        if resolved.is_file() {
+            return Some(resolved);
+        }
+    }
+    let fallback = settings_dir().join("icons").join(format!("{kind}.png"));
+    fallback.is_file().then_some(fallback)
+}
+
+fn find_pack_dir(pack_id: &str) -> Option<PathBuf> {
+    for root in pack_roots() {
+        let Ok(entries) = fs::read_dir(&root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let Ok(text) = fs::read_to_string(dir.join("pet.json")) else {
+                continue;
+            };
+            let Ok(manifest) = serde_json::from_str::<Value>(&text) else {
+                continue;
+            };
+            let id = manifest
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| {
+                    dir.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("pet")
+                        .to_string()
+                });
+            if id == pack_id {
+                return Some(dir);
+            }
+        }
+    }
+    None
+}
+
+fn package_icon_path(kind: &str) -> Option<PathBuf> {
+    let pack_id = read_config().pack_id;
+    let dir = find_pack_dir(&pack_id)?;
+    let path = dir.join(format!("{kind}.png"));
+    path.is_file().then_some(path)
+}
+
+fn load_icon_bytes(kind: &str) -> Option<Vec<u8>> {
+    if let Some(path) = configured_icon_path(kind) {
+        if let Ok(bytes) = fs::read(path) {
+            return Some(bytes);
+        }
+    }
+    if let Some(path) = package_icon_path(kind) {
+        if let Ok(bytes) = fs::read(path) {
+            return Some(bytes);
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn set_dock_icon(bytes: &[u8]) -> bool {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return false;
+    };
+    let data = unsafe {
+        NSData::dataWithBytes_length(
+            bytes.as_ptr() as *const std::ffi::c_void,
+            bytes.len(),
+        )
+    };
+    let Some(image) = (unsafe { NSImage::initWithData(NSImage::alloc(), &data) }) else {
+        return false;
+    };
+    unsafe {
+        NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image));
+    }
+    true
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_dock_icon(_bytes: &[u8]) -> bool {
+    false
 }
 
 /* ------------------------------------------------------------------ */
@@ -839,18 +993,85 @@ fn spawn_hover_loop(window: WebviewWindow, pet_size: u32) {
     });
 }
 
+fn apply_icons(app: &AppHandle) {
+    if let Some(bytes) = load_icon_bytes("app") {
+        let cloned = bytes.clone();
+        let _ = app.run_on_main_thread(move || {
+            let ok = set_dock_icon(&cloned);
+            log_msg(&format!("icon: app custom applied={ok}"));
+        });
+    } else {
+        log_msg("icon: app default (built-in)");
+    }
+
+    if let Some(bytes) = load_icon_bytes("tray") {
+        if let Some(tray) = app.tray_by_id("pet-tray") {
+            match tauri::image::Image::from_bytes(&bytes) {
+                Ok(image) => {
+                    let _ = tray.set_icon(Some(image));
+                    log_msg("icon: tray custom applied");
+                }
+                Err(err) => log_msg(&format!("icon: tray custom failed: {err}")),
+            }
+        }
+    }
+}
+
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let settings = read_settings();
     let toggle = MenuItem::with_id(app, "toggle", "显示 / 隐藏", true, None::<&str>)?;
+    let auto_start = CheckMenuItem::with_id(
+        app,
+        "auto-start",
+        "随 DSH 启动（下次启动生效）",
+        true,
+        settings.auto_start,
+        None::<&str>,
+    )?;
+    let auto_start_item = auto_start.clone();
+    let reload_icons = MenuItem::with_id(app, "reload-icons", "重载自定义图标", true, None::<&str>)?;
+    let open_icons = MenuItem::with_id(app, "open-icons", "打开图标目录…", true, None::<&str>)?;
     let recenter = MenuItem::with_id(app, "recenter", "移到当前屏幕", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&toggle, &recenter, &quit])?;
-    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &auto_start,
+            &reload_icons,
+            &open_icons,
+            &toggle,
+            &recenter,
+            &quit,
+        ],
+    )?;
+
+    let custom_tray = load_icon_bytes("tray");
+    let icon = match custom_tray.as_ref() {
+        Some(bytes) => tauri::image::Image::from_bytes(bytes)?,
+        None => tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?,
+    };
 
     TrayIconBuilder::with_id("pet-tray")
         .icon(icon)
         .menu(&menu)
-        .on_menu_event(|app, event| match event.id().as_ref() {
+        .on_menu_event(move |app, event| match event.id().as_ref() {
             "quit" => app.exit(0),
+            "auto-start" => {
+                let mut settings = read_settings();
+                settings.auto_start = !settings.auto_start;
+                write_settings(&settings);
+                let _ = auto_start_item.set_checked(settings.auto_start);
+                log_msg(&format!(
+                    "settings: autoStart={} (takes effect next DSH start)",
+                    settings.auto_start
+                ));
+            }
+            "reload-icons" => apply_icons(app),
+            "open-icons" => {
+                let dir = settings_dir().join("icons");
+                let _ = fs::create_dir_all(&dir);
+                let _ = Command::new("open").arg(&dir).status();
+            }
             "toggle" => {
                 if let Some(window) = app.get_webview_window("pet") {
                     if window.is_visible().unwrap_or(false) {
@@ -922,6 +1143,7 @@ fn main() {
             }
             spawn_hover_loop(window.clone(), config.size);
             build_tray(app.handle())?;
+            apply_icons(app.handle());
             spawn_state_loop(app.handle().clone());
             write_config(&config);
 

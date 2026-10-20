@@ -65,16 +65,27 @@ function stopPet() {
   }
 }
 
+function readAutoStart() {
+  if (process.env.DSH_PET_AUTOSTART === '1') return true
+  try {
+    const text = readFileSync(path.join(os.homedir(), '.dsh-desktop-pet', 'settings.json'), 'utf8')
+    return JSON.parse(text).autoStart === true
+  } catch {
+    // 默认关闭：必须由用户在桌宠托盘里打开「随 DSH 启动」
+    return false
+  }
+}
+
 function launchPet() {
-  if (process.env.DSH_PET_SKIP_LAUNCH === '1') return
+  if (process.env.DSH_PET_SKIP_LAUNCH === '1') return false
   if (petRunning()) {
     console.log('[dsh-pet] pet already running')
-    return
+    return false
   }
   const app = findApp()
   if (!app) {
     console.warn('[dsh-pet] 没找到 DSH Pet.app，设置 DSH_PET_APP 指向 .app 路径')
-    return
+    return false
   }
   try {
     const env = { ...process.env, DSH_PET_MANAGED: '1' }
@@ -82,8 +93,10 @@ function launchPet() {
     const child = spawn(appBinary(app), [], { env, stdio: 'ignore', detached: true })
     child.unref()
     console.log('[dsh-pet] launched', appBinary(app))
+    return true
   } catch (err) {
     console.warn('[dsh-pet] launch failed:', err && err.message)
+    return false
   }
 }
 
@@ -542,7 +555,13 @@ export function apply(ctx) {
 
   // —— 启动桌宠 + 注册桥 ——
   try {
-    launchPet()
+    const autoStart = readAutoStart()
+    if (autoStart) {
+      launchPet()
+    } else {
+      console.log('[dsh-pet] autoStart=false, bridge only（在托盘里打开「随 DSH 启动」后下次 DSH 生效）')
+    }
+
     const stopListening = ctx.on('session/event', onSessionEvent)
     writeNow()
     // 心跳：state.json 保持新鲜，桌宠据此判断 bridge 是否还活着。
@@ -567,7 +586,7 @@ export function apply(ctx) {
       } catch {
         /* ignore */
       }
-      stopPet()
+      if (autoStart) stopPet()
     })
   } catch (err) {
     console.warn('[dsh-pet] bridge disabled:', err && err.message)

@@ -15,7 +15,7 @@
 - **行为 mod**：`pets/<id>/behavior.json` 定义动画表、阶段映射、点击/拖拽互动、挂机小动作、气泡和费用模板；非程序员也能改。
 - **17 段动画**：待机/跑动/挥手/跳跃/出错/等待/干活/思考 + 拖拽/摸头/害羞/打瞌睡/吃白饭/伸懒腰/跳舞/发呆。
 - **费用估算**：每轮 `turn/end` 后按 DeepSeek 峰谷价目算本轮和整段会话的 token 费用，气泡显示 `本轮 ¥x · 本会话 ¥y`。
-- **随 DSH 启动**：`dsh-launcher/` host 插件拉起桌宠；DSH 退出时关掉，DSH 被强杀时桌宠自己退出。
+- **随 DSH 启动（默认关）**：`dsh-launcher/` host 插件负责拉起/关闭桌宠；开关在托盘菜单「随 DSH 启动」，默认不自动拉起，只做状态/费用桥。
 
 ## 快速开始
 
@@ -154,16 +154,43 @@ Tauri WebviewWindow（透明/无边框/置顶/skipTaskbar）
 9 drag | 10 pet | 11 shy | 12 sleep | 13 eat | 14 stretch | 15 dance | 16 daydream
 ```
 
-## 随 DSH 启动
+## 随 DSH 启动（默认关）
 
-`dsh-launcher/` 是 DSH host 插件，同时负责「启动桌宠」+「状态/费用桥」。安装（DSH 桌面端不允许外部 CLI 改 profile，需要走插件页）：
+`dsh-launcher/` 是 DSH host 插件：**默认只做状态/费用桥，不自动拉起桌宠**。要随 DSH 启动：
 
-1. DSH 左侧栏 → **插件** → 右上 **添加插件** → **本地目录**
-2. 填 `/Users/wqian/Dev/dsh-desktop-pet/dsh-launcher`（或你 clone 后的绝对路径）
-3. 安装后点 **立即启用**
-4. **完全退出 DSH 再打开**（插件层重启才组装）
+1. 先手动打开一次桌宠（`npm run open`）
+2. 菜单栏托盘图标 → 勾选 **随 DSH 启动（下次启动生效）**
+3. 下次完全退出/重开 DSH，插件会拉起桌宠；DSH 退出时关掉，DSH 被强杀时桌宠自己退出
 
-之后再打开 DSH，桌宠会自己出现；不需要手动 `npm run open`。细节见 [`dsh-launcher/README.md`](dsh-launcher/README.md)。
+开关写在 `~/.dsh-desktop-pet/settings.json`：
+
+```json
+{ "autoStart": true }
+```
+
+默认 `false`。关闭时插件仍会写状态桥，手动打开的桌宠照常收到状态和费用。DSH 插件页安装步骤见 [`dsh-launcher/README.md`](dsh-launcher/README.md)。
+
+## 自定义图标
+
+默认使用项目内我们自己画的图标（`src-tauri/icons/`），不配置就保持默认。想换的话，把 PNG 放到：
+
+```
+~/.dsh-desktop-pet/icons/app.png     # Dock 图标，建议 512×512 / 1024×1024
+~/.dsh-desktop-pet/icons/tray.png    # 菜单栏图标，建议 22×22 / 44×44（黑+透明 template 风格）
+```
+
+或者在宠物包里放：`pets/<id>/icon.png`、`pets/<id>/tray.png`（优先级低于用户目录）。然后在托盘菜单点 **重载自定义图标** 立即生效；重启也会自动加载。
+
+也可以用 `~/.dsh-desktop-pet/settings.json` 的 `icons.app` / `icons.tray` 显式指定路径（相对 `~/.dsh-desktop-pet/` 或绝对路径）：
+
+```json
+{
+  "autoStart": false,
+  "icons": { "app": "icons/my-icon.png", "tray": "icons/my-tray.png" }
+}
+```
+
+说明：Dock 图标是运行时替换；Finder/启动台里的 `.app`  bundle 图标仍是打包时那张，要改 bundle 图标需要重新 `tauri icon` + 打包。托盘菜单还有 **打开图标目录…** 直接打开 `~/.dsh-desktop-pet/icons/`。
 
 ## 美术与许可
 
