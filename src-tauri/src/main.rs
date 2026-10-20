@@ -1025,6 +1025,19 @@ fn settings_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<taur
     )
 }
 
+/// 在菜单事件回调里同步 remove/build tray 会死锁（Tauri tray register 会等菜单事件锁）。
+/// 所有菜单触发的设置变更先落盘 + 通知前端，等菜单事件返回后再重建托盘/应用可见性。
+fn schedule_tray_refresh(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(250));
+        let app_main = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            rebuild_tray(&app_main);
+        });
+    });
+}
+
 fn toggle_setting(app: &AppHandle, key: &str) {
     let mut settings = read_settings();
     match key {
@@ -1037,9 +1050,8 @@ fn toggle_setting(app: &AppHandle, key: &str) {
         _ => return,
     }
     write_settings(&settings);
-    rebuild_tray(app);
-    apply_visibility(app, &settings);
     emit_display_settings(app);
+    schedule_tray_refresh(app);
     log_msg(&format!("settings toggled: {key} -> {settings:?}"));
 }
 
@@ -1355,8 +1367,8 @@ fn main() {
                     settings.show_dock_icon = !visible;
                     settings.show_tray_icon = !visible;
                     write_settings(&settings);
-                    rebuild_tray(app);
                     emit_display_settings(app);
+                    schedule_tray_refresh(app);
                 }
                 "ctx-open-dsh" => open_dsh_url(),
                 "ctx-quit" => app.exit(0),
