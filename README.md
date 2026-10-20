@@ -30,6 +30,7 @@
 | `dpsk-girl` | ds 鲸鱼女仆 | LINNoot/dsh-co-pet（MIT） |
 | `yuexinmiao` | 月薪喵 | LINNoot/dsh-co-pet（MIT） |
 | `shenshen` | 深深 | schrieeeffer/shenshen-codex-pet（视觉 CC BY-NC-SA 4.0） |
+| `snowball-red-scarf` | 雪团 · 红围巾白狐 | 原创 AI 辅助（MIT；见包内 NOTICE，模型生成素材权利有不确定性） |
 
 在 **DSH 设置 → 桌宠 → 形象** 里选，或右键桌宠 → **更换形象**。约 1 秒热切换，不重启。
 

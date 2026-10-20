@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "animations": {
+    "idle": {"row": 0, "frames": 6, "durations": [320,240,240,320,240,240], "loop": true},
+    "walk-right": {"row": 1, "frames": 8, "durations": [100,100,100,100,100,100,100,100], "loop": true},
+    "walk-left": {"row": 2, "frames": 8, "durations": [100,100,100,100,100,100,100,100], "loop": true},
+    "wave": {"row": 3, "frames": 4, "durations": [200,180,200,220], "loop": false},
+    "jump": {"row": 4, "frames": 5, "durations": [140,150,240,150,180], "loop": false},
+    "sad": {"row": 5, "frames": 8, "durations": [240,180,180,240,240,180,180,260], "loop": false},
+    "wait": {"row": 6, "frames": 6, "durations": [260,260,260,260,260,260], "loop": true},
+    "work": {"row": 7, "frames": 6, "durations": [150,150,150,150,150,150], "loop": true},
+    "think": {"row": 8, "frames": 6, "durations": [280,240,240,280,240,240], "loop": true}
+  },
+  "phases": {
+    "idle": {"animation": "idle"},
+    "thinking": {"animation": "think"},
+    "tool": {"animation": "work"},
+    "waiting": {"animation": "wait"},
+    "review": {"animation": "think"},
+    "done": {"sequence": ["jump","wave","idle"]},
+    "failed": {"sequence": ["sad","wait","idle"]}
+  },
+  "bubbles": {
+    "thinking": ["让我揉揉小脑袋…", "雪团正在想办法…"],
+    "waiting": ["围巾暖暖的，等你确认～", "准备好就叫我呀。"],
+    "review": ["用小放大镜再检查一遍。"],
+    "done": ["做好啦！尾巴摇起来～", "击爪！"],
+    "failed": ["呜，遇到一点小麻烦。", "别急，我们看看哪里出了问题。"]
+  },
+  "toolLabels": {"shell":"小爪子敲命令…","edit":"认真修改中…","web":"找找线索…","read":"仔细读一读…","agent":"一起想办法…","mcp":"忙碌的小狐狸…"},
+  "interactions": {
+    "click": {"animations": ["wave"], "bubbles": ["我叫雪团，嗷呜～", "红围巾分你一半暖！"]},
+    "drag": {"animation": "jump", "bubble": "起飞啦，围巾要抓紧！"},
+    "idleActions": [
+      {"afterMs": 20000, "animation": "walk-right", "once": true},
+      {"afterMs": 35000, "animation": "walk-left", "once": true},
+      {"afterMs": 60000, "animation": "wave", "bubble": "我在这里陪你～", "once": true}
+    ]
+  },
+  "cost": {"enabled": true, "template": "本轮 {lastAmount} · 本会话 {sessionAmount}", "tokensTemplate": "{tokens} tokens", "delayMs": 700, "ttlMs": 9000}
+}
