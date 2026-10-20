@@ -1,0 +1,351 @@
+{
+  "version": 1,
+  "animations": {
+    "idle": {
+      "row": 0,
+      "frames": 8,
+      "durations": [
+        375,
+        375,
+        375,
+        375,
+        375,
+        375,
+        375,
+        375
+      ],
+      "loop": true
+    },
+    "walk-right": {
+      "row": 1,
+      "frames": 8,
+      "durations": [
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250
+      ],
+      "loop": true
+    },
+    "walk-left": {
+      "row": 2,
+      "frames": 8,
+      "durations": [
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250
+      ],
+      "loop": true
+    },
+    "wave": {
+      "row": 3,
+      "frames": 4,
+      "durations": [
+        400,
+        400,
+        400,
+        400
+      ],
+      "loop": false
+    },
+    "jump": {
+      "row": 4,
+      "frames": 5,
+      "durations": [
+        300,
+        300,
+        300,
+        300,
+        300
+      ],
+      "loop": false
+    },
+    "sad": {
+      "row": 5,
+      "frames": 8,
+      "durations": [
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250
+      ],
+      "loop": true
+    },
+    "wait": {
+      "row": 6,
+      "frames": 6,
+      "durations": [
+        417,
+        417,
+        417,
+        417,
+        417,
+        417
+      ],
+      "loop": true
+    },
+    "work": {
+      "row": 7,
+      "frames": 6,
+      "durations": [
+        333,
+        333,
+        333,
+        333,
+        333,
+        333
+      ],
+      "loop": true
+    },
+    "think": {
+      "row": 8,
+      "frames": 6,
+      "durations": [
+        333,
+        333,
+        333,
+        333,
+        333,
+        333
+      ],
+      "loop": true
+    },
+    "drag": {
+      "row": 9,
+      "frames": 6,
+      "durations": [
+        333,
+        333,
+        333,
+        333,
+        333,
+        333
+      ],
+      "loop": false
+    },
+    "pet": {
+      "row": 10,
+      "frames": 6,
+      "durations": [
+        333,
+        333,
+        333,
+        333,
+        333,
+        333
+      ],
+      "loop": false
+    },
+    "shy": {
+      "row": 11,
+      "frames": 6,
+      "durations": [
+        333,
+        333,
+        333,
+        333,
+        333,
+        333
+      ],
+      "loop": false
+    },
+    "sleep": {
+      "row": 12,
+      "frames": 8,
+      "durations": [
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250
+      ],
+      "loop": false
+    },
+    "eat": {
+      "row": 13,
+      "frames": 6,
+      "durations": [
+        333,
+        333,
+        333,
+        333,
+        333,
+        333
+      ],
+      "loop": false
+    },
+    "stretch": {
+      "row": 14,
+      "frames": 6,
+      "durations": [
+        333,
+        333,
+        333,
+        333,
+        333,
+        333
+      ],
+      "loop": false
+    },
+    "dance": {
+      "row": 15,
+      "frames": 8,
+      "durations": [
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250,
+        250
+      ],
+      "loop": false
+    },
+    "daydream": {
+      "row": 16,
+      "frames": 6,
+      "durations": [
+        333,
+        333,
+        333,
+        333,
+        333,
+        333
+      ],
+      "loop": false
+    }
+  },
+  "phases": {
+    "idle": {
+      "animation": "idle"
+    },
+    "thinking": {
+      "animation": "think"
+    },
+    "tool": {
+      "animation": "work"
+    },
+    "waiting": {
+      "animation": "wait"
+    },
+    "review": {
+      "animation": "think"
+    },
+    "done": {
+      "sequence": [
+        "jump",
+        "wave",
+        "idle"
+      ]
+    },
+    "failed": {
+      "sequence": [
+        "sad",
+        "wait",
+        "idle"
+      ]
+    }
+  },
+  "bubbles": {
+    "thinking": [
+      "思考中…",
+      "让我想想…",
+      "整理一下思路…"
+    ],
+    "waiting": [
+      "等你确认…",
+      "这里需要你一下"
+    ],
+    "review": [
+      "检查中…",
+      "复盘一下…"
+    ],
+    "done": [
+      "搞定！",
+      "干得漂亮",
+      "收工～"
+    ],
+    "failed": [
+      "出问题了…",
+      "要不要看看日志？"
+    ]
+  },
+  "toolLabels": {
+    "shell": "跑命令中…",
+    "edit": "改代码中…",
+    "web": "查资料中…",
+    "read": "读文件…",
+    "agent": "调度子代理…",
+    "mcp": "调工具中…"
+  },
+  "interactions": {
+    "click": {
+      "animations": [
+        "wave",
+        "pet",
+        "shy",
+        "dance"
+      ],
+      "bubbles": [
+        "嗯哼～",
+        "在呢在呢",
+        "别戳啦～",
+        "摸鱼中…"
+      ]
+    },
+    "drag": {
+      "animation": "drag",
+      "bubble": "放我下来～"
+    },
+    "idleActions": [
+      {
+        "afterMs": 90000,
+        "animation": "daydream",
+        "bubble": "发会儿呆…",
+        "once": true
+      },
+      {
+        "afterMs": 240000,
+        "animation": "sleep",
+        "bubble": "Zzz…",
+        "once": true
+      },
+      {
+        "afterMs": 420000,
+        "animation": "eat",
+        "bubble": "吃白饭时间到",
+        "once": true
+      },
+      {
+        "afterMs": 540000,
+        "animation": "stretch",
+        "bubble": "伸个懒腰～",
+        "once": true
+      }
+    ]
+  },
+  "cost": {
+    "enabled": true,
+    "template": "本轮 {lastAmount} · 本会话 {sessionAmount}",
+    "tokensTemplate": "{tokens} tokens",
+    "delayMs": 700,
+    "ttlMs": 9000
+  }
+}

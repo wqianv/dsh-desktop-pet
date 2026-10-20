@@ -1,11 +1,21 @@
 {
   "name": "dsh-desktop-pet-launcher",
-  "version": "0.1.0",
-  "description": "Launch dsh-desktop-pet together with DeepSeek Harness",
+  "version": "0.2.0",
+  "description": "Launch dsh-desktop-pet with DSH + bridge session state and per-turn cost",
   "type": "module",
   "main": "index.js",
-  "files": ["index.js", "cordis.patch.yml", "README.md"],
-  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
-  "engines": { "dsh": ">=0.2.1-rc.2 <0.3.0" },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
+  },
   "license": "MIT"
 }

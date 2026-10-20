@@ -7,9 +7,9 @@
 - Assets (animations / prompts / source videos): the upstream README states
   **“允许开源使用，禁止商用”** (open-source use allowed, commercial use prohibited).
   This repository therefore treats the pet art as **non-commercial fan art**.
-- Conversion: `tools/make-dafeiyu-pet.py` extracts frames from 8 upstream transparent
+- Conversion: `tools/make-dafeiyu-pet.py` extracts frames from 16 upstream transparent
   VP9 WebM clips (stored in `tools/art-src/dafeiyu/`), crops them to one shared window,
-  and packs a 1536×1872 `sprite2d` atlas. No character art is redrawn.
+  and packs a 1536×3536 `sprite2d` atlas. No character art is redrawn.
 - The character is unofficial, not affiliated with or endorsed by DeepSeek or the
   original rights holders. Do not use commercially.
 

@@ -1,52 +1,59 @@
 'use strict'
 
 /**
- * 渲染端：雪碧图逐帧动画 + 气泡 + 命中检测/拖拽 + 点击反应。
+ * 渲染端：行为配置驱动的雪碧图动画 + 气泡 + 命中检测/拖拽 + 点击/挂机互动。
  * 只依赖 preload 暴露的 window.petAPI，不直接碰 Node/Electron。
+ *
+ * 行为来自 pet pack 的 behavior.json（Rust 会合并到 manifest.behavior）；
+ * 没有 behavior.json 的旧 pack 会回退到内置 DEFAULT_BEHAVIOR。
  */
 
-const ROW_NAMES = [
-  'idle',
-  'running-right',
-  'running-left',
-  'waving',
-  'jumping',
-  'failed',
-  'waiting',
-  'running',
-  'review',
-]
-
-const DEFAULT_DURATIONS = {
-  idle: [280, 110, 110, 140, 140, 320],
-  'running-right': [120, 120, 120, 120, 120, 120, 120, 220],
-  'running-left': [120, 120, 120, 120, 120, 120, 120, 220],
-  waving: [140, 140, 140, 280],
-  jumping: [140, 140, 140, 140, 280],
-  failed: [140, 140, 140, 140, 140, 140, 140, 240],
-  waiting: [150, 150, 150, 150, 150, 260],
-  running: [120, 120, 120, 120, 120, 220],
-  review: [150, 150, 150, 150, 150, 280],
+const DEFAULT_BEHAVIOR = {
+  animations: {
+    idle: { row: 0 },
+    'walk-right': { row: 1 },
+    'walk-left': { row: 2 },
+    wave: { row: 3 },
+    jump: { row: 4 },
+    sad: { row: 5 },
+    wait: { row: 6 },
+    work: { row: 7 },
+    think: { row: 8 },
+  },
+  phases: {
+    idle: { animation: 'idle' },
+    thinking: { animation: 'think' },
+    tool: { animation: 'work' },
+    waiting: { animation: 'wait' },
+    review: { animation: 'think' },
+    done: { sequence: ['jump', 'wave', 'idle'] },
+    failed: { sequence: ['sad', 'wait', 'idle'] },
+  },
+  bubbles: {
+    thinking: ['思考中…'],
+    waiting: ['等你确认…'],
+    review: ['检查中…'],
+    done: ['搞定！'],
+    failed: ['出错了…'],
+  },
+  toolLabels: {
+    shell: '跑命令中…',
+    edit: '改代码中…',
+    web: '查资料中…',
+    read: '读文件…',
+    agent: '调度子代理…',
+    mcp: '调工具中…',
+  },
+  interactions: {
+    click: { animations: ['wave'], bubbles: ['嗯哼～'] },
+    drag: null,
+    idleActions: [],
+  },
+  cost: null,
 }
 
-const PHASE_FALLBACK_TRACK = {
-  idle: 'idle',
-  thinking: 'running',
-  tool: 'running-right',
-  waiting: 'waiting',
-  review: 'review',
-  done: 'jumping',
-  failed: 'failed',
-}
-
-const TOOL_LABEL = {
-  shell: '跑命令中…',
-  edit: '改代码中…',
-  web: '查资料中…',
-  read: '读文件…',
-  agent: '调度子代理…',
-  mcp: '调工具中…',
-}
+const LOOPING_PHASES = new Set(['idle', 'thinking', 'tool', 'waiting', 'review'])
+const DEFAULT_FRAME_MS = 150
 
 const petEl = document.getElementById('pet')
 const bubbleEl = document.getElementById('bubble')
@@ -55,8 +62,10 @@ const debugEl = document.getElementById('debug')
 let bootstrap = null
 let packs = []
 let activePack = null
+let behavior = DEFAULT_BEHAVIOR
 let state = { phase: 'idle', activeCount: 0, toolFamily: null }
 let frameTimer = null
+let playToken = 0
 let bubbleTimer = null
 let currentPhase = null
 let interactive = false
@@ -65,10 +74,20 @@ const managedHover = !!(window.petAPI && window.petAPI.managedHover)
 let pointerDown = null
 let pointerMoved = false
 let dragging = false
+let interactionActive = false
+let dragAnim = false
+let idleTimers = []
+const idlePlayed = new Set()
+let lastCostAt = 0
 
 /* ------------------------------------------------------------------ */
 /* 工具函数                                                           */
 /* ------------------------------------------------------------------ */
+
+function pick(list) {
+  if (!Array.isArray(list) || list.length === 0) return null
+  return list[Math.floor(Math.random() * list.length)]
+}
 
 function escapeForUrlPath(p) {
   return String(p)
@@ -87,27 +106,37 @@ function setPetSize(px) {
   document.documentElement.style.setProperty('--pet-size', `${size}px`)
 }
 
-function rowFor(track) {
-  return ROW_NAMES.indexOf(track)
+function compactTokens(n) {
+  const value = Number(n) || 0
+  if (value < 1000) return String(value)
+  if (value < 1_000_000) return `${Math.round(value / 100) / 10}K`
+  return `${Math.round(value / 100_000) / 10}M`
 }
 
-function framesForTrack(track) {
-  if (!activePack) return []
-  const manifest = activePack.manifest
-  const row = rowFor(track)
-  if (row < 0) return []
-  const count = Number(manifest.frames[row] || 0) || 6
-  const trackConfig = (manifest.tracks && manifest.tracks[track]) || null
-  const custom = trackConfig && Array.isArray(trackConfig.durations) ? trackConfig.durations : null
-  const durations = custom && custom.length
-    ? custom
-    : DEFAULT_DURATIONS[track] || new Array(count).fill(150)
-  return Array.from({ length: count }, (_, i) => ({
-    row,
-    column: i,
-    duration: Number(durations[i % durations.length]) || 150,
-  }))
+function formatAmount(amount, currency) {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return '—'
+  const symbol = currency === 'USD' ? '$' : '¥'
+  const digits = Math.abs(amount) < 0.01 ? 4 : Math.abs(amount) < 1 ? 3 : 2
+  return symbol + amount.toFixed(digits)
 }
+
+function normalizeBehavior(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {}
+  const merged = {
+    ...DEFAULT_BEHAVIOR,
+    ...source,
+    animations: { ...DEFAULT_BEHAVIOR.animations, ...(source.animations || {}) },
+    phases: { ...DEFAULT_BEHAVIOR.phases, ...(source.phases || {}) },
+    bubbles: { ...DEFAULT_BEHAVIOR.bubbles, ...(source.bubbles || {}) },
+    toolLabels: { ...DEFAULT_BEHAVIOR.toolLabels, ...(source.toolLabels || {}) },
+    interactions: { ...DEFAULT_BEHAVIOR.interactions, ...(source.interactions || {}) },
+  }
+  return merged
+}
+
+/* ------------------------------------------------------------------ */
+/* 动画                                                               */
+/* ------------------------------------------------------------------ */
 
 function setFrame(row, column) {
   if (!activePack) return
@@ -118,66 +147,104 @@ function setFrame(row, column) {
   petEl.style.backgroundPosition = `${x}% ${y}%`
 }
 
-/* ------------------------------------------------------------------ */
-/* 动画                                                               */
-/* ------------------------------------------------------------------ */
+function animationFrames(id) {
+  const spec = behavior.animations[id]
+  if (!activePack || !spec || typeof spec.row !== 'number') return []
+  const manifest = activePack.manifest
+  const count = Math.max(1, Number(spec.frames) || Number(manifest.frames && manifest.frames[spec.row]) || 6)
+  const fromSpec = Array.isArray(spec.durations) && spec.durations.length ? spec.durations : null
+  const fromManifest = manifest.tracks && manifest.tracks[id] && Array.isArray(manifest.tracks[id].durations)
+    ? manifest.tracks[id].durations
+    : null
+  const durations = fromSpec || fromManifest || []
+  return Array.from({ length: count }, (_, i) => ({
+    row: spec.row,
+    column: i,
+    duration: Number(durations[i % Math.max(1, durations.length)]) || DEFAULT_FRAME_MS,
+  }))
+}
 
 function stopFrames() {
+  playToken += 1
   if (frameTimer) clearTimeout(frameTimer)
   frameTimer = null
 }
 
-function playTrack(track, onDone) {
-  const frames = framesForTrack(track)
+function playAnimation(id, options) {
+  const opts = options || {}
+  const frames = animationFrames(id)
   if (!frames.length) {
-    if (onDone) onDone()
+    if (opts.onDone) opts.onDone()
     return
   }
-  let i = 0
+  stopFrames()
+  const token = playToken
+  let index = 0
   const tick = () => {
-    if (i >= frames.length) {
-      frameTimer = null
-      if (onDone) onDone()
-      return
+    if (token !== playToken) return
+    if (index >= frames.length) {
+      if (opts.loop) {
+        index = 0
+      } else {
+        frameTimer = null
+        if (opts.onDone) opts.onDone()
+        return
+      }
     }
-    const frame = frames[i]
-    i += 1
+    const frame = frames[index]
+    index += 1
     setFrame(frame.row, frame.column)
     frameTimer = setTimeout(tick, frame.duration)
   }
   tick()
 }
 
-function sequenceFor(phase) {
-  const seq = activePack && activePack.manifest.sequences && activePack.manifest.sequences[phase]
-  if (Array.isArray(seq) && seq.length) return seq
-  return [PHASE_FALLBACK_TRACK[phase] || 'idle']
+function playSequence(ids, options) {
+  const opts = options || {}
+  if (!Array.isArray(ids) || ids.length === 0) {
+    if (opts.onDone) opts.onDone()
+    return
+  }
+  let index = 0
+  const next = () => {
+    if (index >= ids.length) {
+      if (opts.loop) {
+        index = 0
+      } else {
+        if (opts.onDone) opts.onDone()
+        return
+      }
+    }
+    const id = ids[index]
+    index += 1
+    playAnimation(id, { loop: false, onDone: next })
+  }
+  next()
 }
 
-function isLoopingPhase(phase) {
-  return phase === 'idle' || phase === 'thinking' || phase === 'waiting' || phase === 'review' || phase === 'tool'
+function phaseSpec(phase) {
+  return behavior.phases[phase] || DEFAULT_BEHAVIOR.phases[phase] || { animation: 'idle' }
 }
 
 function playPhase(phase) {
   if (!activePack) return
   stopFrames()
   currentPhase = phase
-  const sequence = sequenceFor(phase)
-  let index = 0
-  const step = () => {
-    if (index >= sequence.length) {
-      if (isLoopingPhase(phase)) {
-        index = 0
-      } else {
-        playPhase('idle')
-        return
-      }
-    }
-    const track = sequence[index]
-    index += 1
-    playTrack(track, step)
+  const spec = phaseSpec(phase)
+  const sequence = Array.isArray(spec.sequence) && spec.sequence.length
+    ? spec.sequence
+    : [spec.animation || 'idle']
+  const looping = LOOPING_PHASES.has(phase)
+  if (looping && sequence.length === 1) {
+    playAnimation(sequence[0], { loop: true })
+    return
   }
-  step()
+  playSequence(sequence, {
+    loop: looping,
+    onDone: () => {
+      if (!looping) playPhase('idle')
+    },
+  })
 }
 
 /* ------------------------------------------------------------------ */
@@ -205,24 +272,131 @@ function showBubble(text, ttlMs) {
 
 function bubbleTextForPhase(current) {
   const phase = current.phase || 'idle'
-  const suffix = Number(current.activeCount) > 1 ? ` · ${current.activeCount} 会话` : ''
-  if (phase === 'thinking') return `思考中…${suffix}`
-  if (phase === 'tool') return `${TOOL_LABEL[current.toolFamily] || '干活中…'}${suffix}`
-  if (phase === 'waiting') return `等你确认…${suffix}`
-  if (phase === 'review') return `检查中…${suffix}`
-  if (phase === 'done') return `搞定！${suffix}`
-  if (phase === 'failed') return `出错了…${suffix}`
+  if (phase === 'tool') {
+    return behavior.toolLabels[current.toolFamily] || '干活中…'
+  }
+  const options = behavior.bubbles[phase]
+  if (Array.isArray(options) && options.length) return pick(options)
   return ''
 }
 
 function showBubbleForPhase(current) {
+  if (interactionActive || dragAnim) return
   const text = bubbleTextForPhase(current)
   if (!text) {
     hideBubble()
     return
   }
+  const suffix = Number(current.activeCount) > 1 ? ` · ${current.activeCount} 会话` : ''
   const persistent = current.phase === 'waiting'
-  showBubble(text, persistent ? 0 : 3800)
+  showBubble(text + suffix, persistent ? 0 : 3800)
+}
+
+function formatCost(cost) {
+  const template = (behavior.cost && behavior.cost.template) || '本轮 {lastAmount} · 本会话 {sessionAmount}'
+  const last = cost.lastTurn || {}
+  const session = cost.session || {}
+  return template
+    .replaceAll('{lastAmount}', formatAmount(last.amount, cost.currency))
+    .replaceAll('{sessionAmount}', formatAmount(session.amount, cost.currency))
+    .replaceAll('{tokens}', compactTokens(last.totalTokens))
+    .replaceAll('{sessionTokens}', compactTokens(session.totalTokens))
+    .replaceAll('{model}', cost.model || '')
+}
+
+function maybeShowCost(prev, next) {
+  const cfg = behavior.cost
+  if (!cfg || cfg.enabled === false) return
+  const cost = next && next.cost
+  const at = cost && ((cost.lastTurn && cost.lastTurn.at) || cost.at)
+  if (!at || at === lastCostAt) return
+  lastCostAt = at
+  const delay = Number(cfg.delayMs) || 700
+  setTimeout(() => {
+    if (interactionActive || dragAnim || !cost) return
+    if (window.petAPI && window.petAPI.log) window.petAPI.log(`cost bubble ${formatCost(cost)}`)
+    showBubble(formatCost(cost), Number(cfg.ttlMs) || 9000)
+  }, delay)
+}
+
+/* ------------------------------------------------------------------ */
+/* 互动 / 挂机小动作                                                   */
+/* ------------------------------------------------------------------ */
+
+function clearIdleActions() {
+  idleTimers.forEach((timer) => clearTimeout(timer))
+  idleTimers = []
+}
+
+function scheduleIdleActions() {
+  clearIdleActions()
+  if (!activePack || state.phase !== 'idle' || interactionActive || dragAnim) return
+  const actions = (behavior.interactions && behavior.interactions.idleActions) || []
+  actions.forEach((action, index) => {
+    if (!action || !action.animation) return
+    if (action.once && idlePlayed.has(index)) return
+    const afterMs = Math.max(1000, Number(action.afterMs) || 60000)
+    const timer = setTimeout(() => {
+      if (state.phase !== 'idle' || interactionActive || dragAnim) return
+      const frames = animationFrames(action.animation)
+      if (!frames.length) return
+      idlePlayed.add(index)
+      interactionActive = true
+      stopFrames()
+      if (action.bubble) showBubble(action.bubble, 3200)
+      playAnimation(action.animation, {
+        loop: false,
+        onDone: () => {
+          interactionActive = false
+          playPhase('idle')
+          scheduleIdleActions()
+        },
+      })
+    }, afterMs)
+    idleTimers.push(timer)
+  })
+}
+
+function playInteraction(kind) {
+  const spec = behavior.interactions && behavior.interactions[kind]
+  if (!spec) return
+  const animations = Array.isArray(spec.animations)
+    ? spec.animations
+    : spec.animation
+      ? [spec.animation]
+      : []
+  const animation = pick(animations)
+  if (!animation) return
+  interactionActive = true
+  clearIdleActions()
+  stopFrames()
+  const bubble = pick(spec.bubbles)
+  if (bubble) showBubble(bubble, 1800)
+  playAnimation(animation, {
+    loop: false,
+    onDone: () => {
+      interactionActive = false
+      playPhase(state.phase || 'idle')
+      scheduleIdleActions()
+    },
+  })
+}
+
+function startDragReaction() {
+  const spec = behavior.interactions && behavior.interactions.drag
+  if (!spec || !spec.animation) return
+  dragAnim = true
+  clearIdleActions()
+  stopFrames()
+  if (spec.bubble) showBubble(spec.bubble, 1600)
+  playAnimation(spec.animation, { loop: true })
+}
+
+function endDragReaction() {
+  if (!dragAnim) return
+  dragAnim = false
+  playPhase(state.phase || 'idle')
+  scheduleIdleActions()
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,19 +407,29 @@ function onState(next) {
   const prev = state
   state = next || { phase: 'idle', activeCount: 0 }
   updateDebug()
-  const phaseChanged = !prev || prev.phase !== next.phase || (next.phase === 'tool' && prev.toolFamily !== next.toolFamily)
+  const phaseChanged = !prev || prev.phase !== state.phase
+    || (state.phase === 'tool' && prev.toolFamily !== state.toolFamily)
+
   if (phaseChanged) {
-    playPhase(next.phase || 'idle')
-    showBubbleForPhase(next)
-  } else if (prev && prev.activeCount !== next.activeCount) {
-    showBubbleForPhase(next)
+    if (prev && prev.phase === 'idle' && state.phase !== 'idle') idlePlayed.clear()
+    if (!interactionActive && !dragAnim) {
+      playPhase(state.phase || 'idle')
+      showBubbleForPhase(state)
+    }
+    if (state.phase === 'idle') scheduleIdleActions()
+    else clearIdleActions()
+  } else if (prev && prev.activeCount !== state.activeCount && !interactionActive && !dragAnim) {
+    showBubbleForPhase(state)
   }
+  maybeShowCost(prev, state)
 }
 
 function updateDebug() {
   if (!debugEl || debugEl.hidden) return
   const current = state || {}
-  debugEl.textContent = `${current.phase || 'idle'}${current.toolFamily ? `:${current.toolFamily}` : ''} · ${current.activeCount || 0} 会话`
+  const cost = current.cost && current.cost.session && current.cost.session.amount
+  const extra = typeof cost === 'number' ? ` · ${formatAmount(cost, current.cost.currency)}` : ''
+  debugEl.textContent = `${current.phase || 'idle'}${current.toolFamily ? `:${current.toolFamily}` : ''} · ${current.activeCount || 0} 会话${extra}`
 }
 
 /* ------------------------------------------------------------------ */
@@ -295,10 +479,7 @@ window.addEventListener('mouseleave', () => {
 
 function reactToClick() {
   if (window.petAPI && window.petAPI.log) window.petAPI.log('click reaction')
-  const back = state.phase || 'idle'
-  showBubble('嗯哼～', 1600)
-  stopFrames()
-  playTrack('waving', () => playPhase(back))
+  playInteraction('click')
 }
 
 petEl.addEventListener('pointerdown', (event) => {
@@ -318,6 +499,7 @@ window.addEventListener('pointermove', (event) => {
     pointerMoved = true
     dragging = true
     petEl.classList.add('dragging')
+    startDragReaction()
     if (nativeDrag) window.petAPI.dragStart({ screenX: event.screenX, screenY: event.screenY })
   }
   if (pointerMoved && !nativeDrag) {
@@ -325,7 +507,7 @@ window.addEventListener('pointermove', (event) => {
   }
 })
 
-window.addEventListener('pointerup', (event) => {
+window.addEventListener('pointerup', () => {
   if (!pointerDown) return
   const moved = pointerMoved
   pointerDown = null
@@ -333,6 +515,7 @@ window.addEventListener('pointerup', (event) => {
   dragging = false
   petEl.classList.remove('dragging')
   if (!nativeDrag) window.petAPI.dragEnd()
+  endDragReaction()
   if (!moved) reactToClick()
 })
 
@@ -349,6 +532,7 @@ function applyPack(pack) {
   activePack = pack
   packs = packs.length ? packs : [pack]
   const manifest = pack.manifest
+  behavior = normalizeBehavior(manifest.behavior)
   petEl.style.backgroundImage = manifest.spritesheetDataUrl
     ? `url("${manifest.spritesheetDataUrl}")`
     : `url("pet://pets/${encodeURIComponent(pack.id)}/${escapeForUrlPath(manifest.spritesheetPath)}")`
@@ -362,10 +546,20 @@ function applyPack(pack) {
     probe.onerror = () => window.petAPI.log(`sprite FAILED ${pack.id}`)
     probe.src = spriteUrl
   }
+  if (window.petAPI && window.petAPI.log) {
+    const ids = Object.keys(behavior.animations || {})
+    window.petAPI.log(`behavior loaded ${pack.id} animations=${ids.length} phases=${Object.keys(behavior.phases || {}).length}`)
+  }
+  lastCostAt = 0
+  idlePlayed.clear()
+  clearIdleActions()
+  interactionActive = false
+  dragAnim = false
   setFrame(0, 0)
   stopFrames()
   currentPhase = null
   playPhase((state && state.phase) || 'idle')
+  scheduleIdleActions()
 }
 
 async function boot() {

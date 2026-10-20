@@ -2,11 +2,12 @@
   "petManifestVersion": 2,
   "id": "dafeiyu",
   "displayName": "吃白饭的蓝色大肥鱼",
-  "description": "来自 PC2005-cloud/dsh-pet 的蓝发小鲸娘桌宠（MIT；素材允许开源使用、禁止商用）。8×9 图集适配，跟随 DSH 会话状态换动作。",
-  "version": "1.0.0",
+  "description": "来自 PC2005-cloud/dsh-pet 的蓝发小鲸娘桌宠（MIT；素材允许开源使用、禁止商用）。8×17 图集 + behavior.json：待机/工作/等待/出错，以及拖拽、摸头、害羞、睡觉、吃白饭、伸懒腰、跳舞、发呆等互动。",
+  "version": "1.1.0",
   "author": "PC2005-cloud",
   "license": "Code MIT (c) 2026 PC2005-cloud; assets open-source use allowed, non-commercial. See NOTICE.md",
   "renderer": "sprite2d",
+  "behaviorPath": "behavior.json",
   "sprite2d": {
     "spritesheetPath": "spritesheet.webp",
     "cell": {
@@ -14,7 +15,7 @@
       "height": 208
     },
     "columns": 8,
-    "atlasRows": 9,
+    "atlasRows": 17,
     "frames": [
       8,
       8,
@@ -24,6 +25,14 @@
       8,
       6,
       6,
+      6,
+      6,
+      6,
+      6,
+      8,
+      6,
+      6,
+      8,
       6
     ],
     "tracks": {
@@ -39,7 +48,7 @@
           375
         ]
       },
-      "running-right": {
+      "walk-right": {
         "durations": [
           250,
           250,
@@ -51,7 +60,7 @@
           250
         ]
       },
-      "running-left": {
+      "walk-left": {
         "durations": [
           250,
           250,
@@ -63,7 +72,7 @@
           250
         ]
       },
-      "waving": {
+      "wave": {
         "durations": [
           400,
           400,
@@ -71,7 +80,7 @@
           400
         ]
       },
-      "jumping": {
+      "jump": {
         "durations": [
           300,
           300,
@@ -80,7 +89,7 @@
           300
         ]
       },
-      "failed": {
+      "sad": {
         "durations": [
           250,
           250,
@@ -92,7 +101,7 @@
           250
         ]
       },
-      "waiting": {
+      "wait": {
         "durations": [
           417,
           417,
@@ -102,7 +111,7 @@
           417
         ]
       },
-      "running": {
+      "work": {
         "durations": [
           333,
           333,
@@ -112,7 +121,91 @@
           333
         ]
       },
-      "review": {
+      "think": {
+        "durations": [
+          333,
+          333,
+          333,
+          333,
+          333,
+          333
+        ]
+      },
+      "drag": {
+        "durations": [
+          333,
+          333,
+          333,
+          333,
+          333,
+          333
+        ]
+      },
+      "pet": {
+        "durations": [
+          333,
+          333,
+          333,
+          333,
+          333,
+          333
+        ]
+      },
+      "shy": {
+        "durations": [
+          333,
+          333,
+          333,
+          333,
+          333,
+          333
+        ]
+      },
+      "sleep": {
+        "durations": [
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250
+        ]
+      },
+      "eat": {
+        "durations": [
+          333,
+          333,
+          333,
+          333,
+          333,
+          333
+        ]
+      },
+      "stretch": {
+        "durations": [
+          333,
+          333,
+          333,
+          333,
+          333,
+          333
+        ]
+      },
+      "dance": {
+        "durations": [
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250
+        ]
+      },
+      "daydream": {
         "durations": [
           333,
           333,
@@ -126,50 +219,28 @@
   },
   "sequences": {
     "idle": [
-      "idle",
-      "idle",
       "idle"
     ],
     "thinking": [
-      "running"
+      "think"
     ],
     "tool": [
-      "running-right",
-      "running",
-      "running-left",
-      "running"
+      "work"
     ],
     "waiting": [
-      "waiting"
+      "wait"
     ],
     "review": [
-      "review",
-      "running"
+      "think"
     ],
     "done": [
-      "jumping",
-      "waving",
+      "jump",
+      "wave",
       "idle"
     ],
     "failed": [
-      "failed",
-      "waiting",
-      "idle"
-    ]
-  },
-  "remarks": {
-    "click": [
-      "哦鲸鲸…",
-      "在呢在呢",
-      "别戳啦～"
-    ],
-    "done": [
-      "搞定！",
-      "干得漂亮"
-    ],
-    "failed": [
-      "出问题了…",
-      "要不要看看日志？"
+      "sad",
+      "wait"
     ]
   }
 }

@@ -207,6 +207,18 @@ fn load_one_pack(dir: &Path) -> Option<PackView> {
     if manifest.get("cell").is_none() {
         manifest["cell"] = json!({ "width": 192, "height": 208 });
     }
+
+    // 可选的行为配置：动画表、状态映射、交互、费用气泡模板。
+    // 不写就由 renderer 用内置默认行为，保持旧 pet pack 兼容。
+    let behavior_path = dir.join("behavior.json");
+    if behavior_path.exists() && behavior_path.starts_with(dir) {
+        if let Ok(text) = fs::read_to_string(&behavior_path) {
+            if let Ok(value) = serde_json::from_str::<Value>(&text) {
+                manifest["behavior"] = value;
+            }
+        }
+    }
+
     manifest["spritesheetDataUrl"] = json!(data_url);
 
     Some(PackView { id, manifest })
@@ -241,7 +253,7 @@ fn load_packs() -> Vec<PackView> {
 /* DSH 会话状态（只读 JSONL）                                          */
 /* ------------------------------------------------------------------ */
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionView {
     session_id: String,
@@ -252,13 +264,15 @@ struct SessionView {
     last_event_at: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PetState {
     phase: String,
     tool_family: Option<String>,
     active_count: usize,
     sessions: Vec<SessionView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cost: Option<Value>,
     updated_at: u64,
 }
 
@@ -269,6 +283,7 @@ impl Default for PetState {
             tool_family: None,
             active_count: 0,
             sessions: Vec::new(),
+            cost: None,
             updated_at: 0,
         }
     }
@@ -502,6 +517,28 @@ fn session_cache() -> &'static Mutex<HashMap<PathBuf, CachedSession>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn bridge_state_path() -> PathBuf {
+    home_dir().join(".dsh-desktop-pet").join("state.json")
+}
+
+/// DSH host 插件写的桥状态（比重新解压 session JSONL 便宜得多）。
+/// 文件超过 30s 没更新就认为 bridge 不在了，回退到 JSONL。
+fn read_bridge_state() -> Option<PetState> {
+    let path = bridge_state_path();
+    let meta = fs::metadata(&path).ok()?;
+    let modified = meta.modified().ok()?;
+    let age = SystemTime::now().duration_since(modified).ok()?;
+    if age > Duration::from_secs(30) {
+        return None;
+    }
+    let text = fs::read_to_string(&path).ok()?;
+    let state: PetState = serde_json::from_str(&text).ok()?;
+    if state.phase.is_empty() {
+        return None;
+    }
+    Some(state)
+}
+
 /// 终态回落（done/failed/thinking 超时 → idle）在每次读取时都重新计算，
 /// 这样文件没变时也能按时间自然回到 idle。
 fn settle(mut view: SessionView, now: u64) -> SessionView {
@@ -523,6 +560,9 @@ fn settle(mut view: SessionView, now: u64) -> SessionView {
 }
 
 fn collect_state() -> PetState {
+    if let Some(state) = read_bridge_state() {
+        return state;
+    }
     let now = now_ms();
     let mut sessions: Vec<SessionView> = Vec::new();
     let mut seen: HashSet<PathBuf> = HashSet::new();
@@ -602,6 +642,7 @@ fn collect_state() -> PetState {
         tool_family: display.and_then(|s| s.tool_family.clone()),
         active_count,
         sessions,
+        cost: None,
         updated_at: now,
     }
 }
