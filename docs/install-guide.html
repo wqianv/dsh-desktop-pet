@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSH 桌宠 · 首次安装指南</title>
+<style>
+  :root{
+    --bg:#eef4ff; --card:#ffffff; --ink:#18233a; --muted:#5b6b84;
+    --line:#dbe5f4; --brand:#2f6fed; --brand-soft:#e8f0ff;
+    --ok:#178a53; --ok-soft:#e8f8ef; --warn:#a86400; --warn-soft:#fff6e2;
+    --shadow:0 10px 30px rgba(30,60,120,.08); --radius:18px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;color:var(--ink);background:
+      radial-gradient(1200px 500px at 10% -10%, #dce9ff 0%, transparent 55%),
+      radial-gradient(900px 400px at 100% 0%, #e6f7f1 0%, transparent 50%),
+      var(--bg);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  a{color:var(--brand);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:940px;margin:0 auto;padding:40px 22px 80px}
+  .hero{padding:34px 32px;border-radius:26px;background:linear-gradient(135deg,#1f4fd8,#2f8ff0 55%,#38c6b4);color:#fff;box-shadow:var(--shadow)}
+  .hero .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.8}
+  .hero h1{font-size:36px;line-height:1.2;margin:10px 0 8px}
+  .hero p{margin:0;opacity:.92;font-size:15.5px;max-width:700px}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+  .badge{font-size:12px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow)}
+  .card h2{margin:0 0 12px;font-size:20px}
+  .card h3{margin:18px 0 8px;font-size:15.5px}
+  .checklist{list-style:none;margin:0;padding:0}
+  .checklist li{position:relative;padding:7px 0 7px 30px;color:var(--muted)}
+  .checklist li::before{content:"✓";position:absolute;left:0;top:7px;width:20px;height:20px;border-radius:50%;background:var(--brand-soft);color:var(--brand);font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .flow{margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow)}
+  .flow-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px;color:var(--muted)}
+  .flow-node{padding:9px 13px;border-radius:10px;background:#f4f8ff;border:1px solid var(--line);color:var(--ink);font-weight:600}
+  .flow-arrow{color:#9db3d6;font-size:18px}
+  .step{margin-top:26px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .step-head{display:flex;gap:16px;align-items:flex-start;padding:22px 26px;border-bottom:1px solid var(--line)}
+  .num{flex:0 0 42px;width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--brand),#45a3f5);color:#fff;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center}
+  .step-head h2{margin:0;font-size:20.5px}
+  .step-head p{margin:4px 0 0;color:var(--muted);font-size:14px}
+  .step-body{padding:20px 26px 24px}
+  .step-body ol{margin:0;padding-left:22px}
+  .step-body ol li{margin:10px 0}
+  code{background:#f1f5fb;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre{background:#0f1a30;color:#dce8ff;border-radius:14px;padding:16px 18px;overflow:auto;font:12.5px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre .c{color:#7f9bc8}
+  .checkpoint{margin-top:16px;padding:12px 14px;border-radius:12px;background:var(--ok-soft);color:var(--ok);border:1px solid #bfe9d1;font-size:13.5px}
+  .warning{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--warn-soft);color:var(--warn);border:1px solid #f2d9a8;font-size:13.5px}
+  .tip{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--brand-soft);color:#234c9b;border:1px solid #c9dbff;font-size:13.5px}
+  .folder{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .tree{background:#0f1a30;color:#dce8ff;border-radius:14px;padding:16px 18px;font:12.5px/1.8 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;overflow:auto}
+  .tree .hl{color:#7fd7b0}
+  .tree .dim{color:#7f9bc8}
+  .mock{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#f9fbff}
+  .mock-bar{display:flex;gap:6px;padding:9px 11px;background:#edf3fc;border-bottom:1px solid var(--line)}
+  .dot{width:9px;height:9px;border-radius:50%;background:#c8d6ea}
+  .mock-body{display:flex;min-height:170px}
+  .mock-side{width:120px;background:#f1f6ff;border-right:1px solid var(--line);padding:12px 10px;font-size:11.5px;color:var(--muted);line-height:2}
+  .mock-side .on{background:var(--brand-soft);color:var(--brand);border-radius:7px;padding:2px 7px;font-weight:700}
+  .mock-main{flex:1;padding:14px 16px;font-size:12px;color:var(--muted)}
+  .mock-line{height:9px;border-radius:6px;background:#e3ebf8;margin:9px 0}
+  .mock-line.w70{width:70%}.mock-line.w45{width:45%}
+  .pill{display:inline-block;font-size:10.5px;color:var(--brand);background:var(--brand-soft);border:1px solid #cbdcff;border-radius:999px;padding:2px 8px;margin-bottom:10px}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  details{border:1px solid var(--line);border-radius:12px;padding:0 14px;margin:8px 0;background:#fff}
+  details summary{cursor:pointer;padding:12px 0;font-weight:650;color:var(--ink)}
+  details p,details li{color:var(--muted);font-size:13.5px}
+  details[open]{padding-bottom:6px}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+  .footer{margin-top:34px;text-align:center;color:#7a8aa3;font-size:12.5px}
+  .kbd{display:inline-block;padding:1px 7px;border:1px solid #c9d6ea;border-bottom-width:2px;border-radius:6px;background:#fff;font-size:12px;color:#33415c}
+  .oneclick{margin-top:22px;padding:24px 26px;border-radius:var(--radius);background:linear-gradient(135deg,#153a8f,#2567d8 60%,#2aa6a0);color:#fff;box-shadow:var(--shadow);display:flex;gap:22px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .oneclick h2{margin:0 0 6px;font-size:23px;color:#fff}
+  .oneclick p{margin:0;color:rgba(255,255,255,.88);font-size:13.5px;max-width:560px}
+  .oneclick code{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.24);color:#fff}
+  .oneclick .cta{background:#fff;color:#153a8f;border:0;border-radius:12px;padding:12px 18px;font:700 13.5px/1.2 inherit;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.18)}
+  .oneclick .cta:hover{transform:translateY(-1px)}
+  .wizard-nav{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:24px;padding:14px 6px}
+  .wizard-dots{display:flex;gap:7px}
+  .wizard-dots span{width:9px;height:9px;border-radius:50%;background:#c7d5ea}
+  .wizard-dots span.on{background:var(--brand);transform:scale(1.2)}
+  .wizard-nav .btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:10px 16px;font:650 13px/1 inherit;cursor:pointer}
+  .wizard-nav .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .wizard-nav .btn:disabled{opacity:.35;cursor:default}
+  .step.hidden{display:none}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#0f1a30;color:#fff;padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:all .2s ease;z-index:99}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  @media (max-width:760px){.grid,.folder,.two-col{grid-template-columns:1fr}.hero h1{font-size:29px}.wrap{padding:24px 14px 60px}.step-head,.step-body{padding:18px}.mock-side{width:96px}}
+  @media print{body{background:#fff}.hero{box-shadow:none}.card,.step,.flow{box-shadow:none;break-inside:avoid}.step{page-break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="hero">
+    <div class="kicker">DSH Desktop Pet · First Install</div>
+    <h1>把桌宠放到你的桌面上</h1>
+    <p>这是给普通用户的首次安装指南。全程大约 3 分钟，只需要装一次；之后打开 DSH，桌宠会自动出现。</p>
+    <div class="badges">
+      <span class="badge">macOS · Apple Silicon</span>
+      <span class="badge">v0.1 beta</span>
+      <span class="badge">无需 Rust / Xcode / Node</span>
+    </div>
+  </section>
+
+  <div class="flow">
+    <div class="flow-row">
+      <span class="flow-node">解压到固定目录</span><span class="flow-arrow">→</span>
+      <span class="flow-node">首次打开 App</span><span class="flow-arrow">→</span>
+      <span class="flow-node">DSH 安装插件</span><span class="flow-arrow">→</span>
+      <span class="flow-node">重启 DSH</span><span class="flow-arrow">→</span>
+      <span class="flow-node">桌宠自动出现</span>
+    </div>
+    <div class="note">只有「首次打开 App」和「安装插件」是一次性的；以后不用再手动打开桌宠。</div>
+  </div>
+
+  <section class="oneclick">
+    <div>
+      <span class="badge" style="background:rgba(255,255,255,.18)">推荐 · 一键安装</span>
+      <h2 style="margin-top:10px">让安装器替你跑完前 3 步</h2>
+      <p>在解压文件夹里双击 <b><code>Install DSH Pet.command</code></b>，然后按提示点两次「继续」。它会自动放行 App、安装 DSH 插件并重启 DSH。装完后回到本页看第 4 步验收即可。</p>
+    </div>
+    <button class="cta" id="copyInstaller" type="button">复制安装器路径</button>
+  </section>
+
+  <div class="grid">
+    <div class="card">
+      <h2>开始前，先确认</h2>
+      <ul class="checklist">
+        <li>Mac 是 Apple Silicon（M1/M2/M3/M4）</li>
+        <li>已经安装并登录 DSH</li>
+        <li>下载了 <b>DSH-Desktop-Pet-v0.1.0-macos-arm64.zip</b></li>
+        <li>知道解压后的文件夹要放在哪（建议 ~/Applications）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>你会得到什么</h2>
+      <p style="margin:0;color:var(--muted);font-size:13.5px">一只悬浮在 macOS 桌面上的桌宠：随 DSH 的思考/工具/等待/完成切换动画，可点击、拖拽、换形象，并显示费用和余额气泡。Dock/菜单栏图标默认隐藏。</p>
+      <div class="tip">不需要安装 Rust、Xcode 或 Node。也不会上传任何数据；状态/余额只走本机 DSH 服务。</div>
+    </div>
+  </div>
+
+  <section class="step">
+    <div class="step-head"><div class="num">1</div><div><h2>解压，并放到固定位置</h2><p>先让文件各就各位，后面插件才能找到它们。</p></div></div>
+    <div class="step-body">
+      <div class="folder">
+        <div class="tree">DSH-Desktop-Pet-v0.1.0-macos-arm64/
+├── <span class="hl">DSH Pet.app</span>       <span class="dim">← 桌宠本体</span>
+├── <span class="hl">pets/</span>             <span class="dim">← 自带形象</span>
+├── <span class="hl">dsh-launcher/</span>    <span class="dim">← DSH 插件</span>
+├── INSTALL.md
+├── install-guide.html
+└── ...</div>
+        <div>
+          <ol>
+            <li>双击 zip 解压。</li>
+            <li>把整个文件夹拖到一个以后不会随手删的位置，例如 <code>~/Applications/</code>。</li>
+            <li>不要只把 <code>DSH Pet.app</code> 单独拿走——它要和 <code>pets/</code>、<code>dsh-launcher/</code> 待在一起。</li>
+          </ol>
+          <div class="checkpoint">检查点：文件夹里能看到 DSH Pet.app、pets、dsh-launcher 三样东西。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head"><div class="num">2</div><div><h2>第一次打开桌宠，过 Gatekeeper</h2><p>v0.1 还没做 Apple 公证，macOS 第一次会拦。只需要处理这一次。</p></div></div>
+    <div class="step-body">
+      <div class="two-col">
+        <div>
+          <h3 style="margin-top:0">推荐：右键 → 打开</h3>
+          <ol>
+            <li>Finder 里找到 <code>DSH Pet.app</code>。</li>
+            <li><b>右键</b>（或 Control + 点击）→ <b>打开</b>。</li>
+            <li>弹窗里再点一次 <b>打开</b>。</li>
+            <li>看到桌宠出现后，先右键它 → <b>退出</b>，避免和插件的自动启动打架。</li>
+          </ol>
+        </div>
+        <div>
+          <h3 style="margin-top:0">如果还是被拦</h3>
+          <ol>
+            <li>打开 <b>系统设置 → 隐私与安全性</b>。</li>
+            <li>页面底部点 <b>仍要打开</b>，输入密码。</li>
+            <li>或确认来源可信后，在解压目录执行：</li>
+          </ol>
+          <pre>xattr -dr com.apple.quarantine \
+  "<span class="dim">你的解压目录</span>/DSH Pet.app"
+open "<span class="dim">你的解压目录</span>/DSH Pet.app"</pre>
+        </div>
+      </div>
+      <div class="warning">⚠️ 这一步是 v0.1 未签名/未公证导致的；正式签名版不会出现。不要从不可信来源下载后强行放行。</div>
+      <div class="checkpoint">检查点：桌宠出现在屏幕右下角。然后先退出它，继续第 3 步。</div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head"><div class="num">3</div><div><h2>给 DSH 装插件（只装一次）</h2><p>插件负责自动拉起桌宠、传状态、提供设置页。</p></div></div>
+    <div class="step-body">
+      <div class="folder">
+        <div>
+          <ol>
+            <li>打开 DSH。</li>
+            <li>进入 <b>设置 → 插件</b>。</li>
+            <li>点 <b>添加插件</b>，选择 <b>本地目录 / Local directory</b>。</li>
+            <li>选中解压文件夹里的 <b><code>dsh-launcher</code></b> 文件夹（不是它的上一级）。</li>
+            <li>安装完成后确认插件是 <b>已启用</b> 状态。</li>
+            <li><b>完全退出 DSH</b>：<span class="kbd">Cmd</span> + <span class="kbd">Q</span>，再重新打开。</li>
+          </ol>
+        </div>
+        <div>
+          <div class="mock" aria-label="DSH 插件页示意图">
+            <div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <div class="mock-body">
+              <div class="mock-side">聊天<br>会话<br><span class="on">插件</span><br>设置</div>
+              <div class="mock-main">
+                <span class="pill">示意图</span>
+                <div class="mock-line w45"></div>
+                <div class="mock-line w70"></div>
+                <div class="mock-line"></div>
+                <div style="margin-top:14px;color:var(--ink);font-weight:650">添加插件</div>
+                <div class="mock-line w70"></div>
+                <div class="mock-line w45"></div>
+              </div>
+            </div>
+          </div>
+          <div class="note">界面文字可能随 DSH 版本略有不同，认准「插件 / Plugins」「本地目录」即可。</div>
+        </div>
+      </div>
+      <div class="checkpoint">检查点：重启 DSH 后，桌宠几秒内自动出现在桌面；DSH 设置里多出「桌宠」页面。</div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head"><div class="num">4</div><div><h2>确认一切正常</h2><p>打开一次设置页，顺手试几个开关。</p></div></div>
+    <div class="step-body">
+      <ol>
+        <li>DSH <b>设置 → 桌宠</b>：切换 Dock/菜单栏图标、上传图标、切换「形象」。</li>
+        <li>鼠标移到桌宠上：可以点击/拖动；移开后点击穿透。</li>
+        <li>右键桌宠：更换形象 / 设置 / 自定义图标 / 打开 DSH / 退出。</li>
+        <li>发一条消息：桌宠随思考、调用工具、等待确认、完成切换动画；回合结束出现费用气泡。</li>
+      </ol>
+      <div class="checkpoint">检查点：设置页能打开、形象能 hot swap、右键菜单正常、费用气泡出现。到这里就装好了。</div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head"><div class="num">5</div><div><h2>可选：添加自己的形象</h2><p>把宠物包放进用户目录，设置页刷新即可。</p></div></div>
+    <div class="step-body">
+      <ol>
+        <li>把新的宠物包目录放到 <code>~/.dsh-desktop-pet/pets/&lt;id&gt;/</code>。</li>
+        <li>DSH <b>设置 → 桌宠 → 形象</b> → 点 <b>刷新</b>。</li>
+        <li>下拉选择新形象，约 1 秒热切换。</li>
+      </ol>
+      <div class="tip">想做全新形象？把 <code>skills/create-dsh-pet/SKILL.md</code> 交给 Codex / DSH agent，并说明角色、动作和许可；规范在 <code>docs/PET_PACK_SPEC.md</code>。</div>
+    </div>
+  </section>
+
+  <div class="two-col">
+    <div class="card">
+      <h2>常见问题</h2>
+      <details open><summary>DSH 起来了，但桌宠没出现</summary>
+        <ol>
+          <li>插件是否启用？</li>
+          <li>是否完全退出并重启过 DSH？</li>
+          <li>安装时选的是不是 <code>dsh-launcher</code>？</li>
+          <li>第 2 步有没有完成？未签名 app 第一次可能被 Gatekeeper 挡住。</li>
+          <li>手动打开一次 app 看是否报错。</li>
+          <li>在解压目录运行 <code>bash scripts/doctor.sh</code>。</li>
+        </ol>
+      </details>
+      <details><summary>提示「无法验证开发者」</summary>
+        <p>回到第 2 步右键打开，或系统设置 → 隐私与安全性 → 仍要打开。v0.1 未公证导致，正式签名版不会有。</p>
+      </details>
+      <details><summary>设置里没有「桌宠」页面</summary>
+        <p>确认插件已启用并完全重启 DSH；确认安装的是 <code>dsh-launcher</code> 文件夹。</p>
+      </details>
+      <details><summary>有桌宠，但没有费用/余额</summary>
+        <p>费用需要 DSH 正常产生会话事件，聊一轮再看；余额需要在 DSH 登录 DeepSeek 账户。未登录/离线不影响动画和互动。</p>
+      </details>
+    </div>
+    <div class="card">
+      <h2>卸载</h2>
+      <ol>
+        <li>DSH → 插件 → 停用/移除 <code>dsh-desktop-pet-launcher</code></li>
+        <li>完全退出 DSH</li>
+        <li>右键桌宠 → 退出</li>
+        <li>删除解压文件夹</li>
+        <li>可选清理：<pre style="margin:8px 0 0">rm -rf ~/.dsh-desktop-pet</pre></li>
+      </ol>
+      <div class="tip">每次打开 DSH 都要手动开桌宠吗？<b>不用。</b>只有首次安装/首次批准 App 是一次性的；之后由插件自动启动。</div>
+    </div>
+  </div>
+
+  <nav class="wizard-nav" id="wizardNav" aria-label="安装步骤">
+    <button class="btn" id="prevStep" type="button">上一步</button>
+    <div class="wizard-dots" id="wizardDots"></div>
+    <button class="btn primary" id="nextStep" type="button">下一步</button>
+  </nav>
+
+  <div class="footer">
+    DSH Desktop Pet v0.1 beta · <a href="https://github.com/wqianv/dsh-desktop-pet">github.com/wqianv/dsh-desktop-pet</a><br>
+    本页可以直接在浏览器打开；也可以 ⌘P 打印成 PDF 发给朋友。
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function () {
+  const steps = Array.from(document.querySelectorAll('section.step'));
+  const dots = document.getElementById('wizardDots');
+  const prev = document.getElementById('prevStep');
+  const next = document.getElementById('nextStep');
+  const nav = document.getElementById('wizardNav');
+  let index = 0;
+
+  function render() {
+    steps.forEach((step, i) => step.classList.toggle('hidden', i !== index));
+    dots.innerHTML = '';
+    steps.forEach((_, i) => {
+      const dot = document.createElement('span');
+      if (i === index) dot.className = 'on';
+      dots.appendChild(dot);
+    });
+    prev.disabled = index === 0;
+    next.textContent = index === steps.length - 1 ? '完成 ✓' : '下一步';
+    const target = steps[index];
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  prev.addEventListener('click', () => { if (index > 0) { index--; render(); } });
+  next.addEventListener('click', () => {
+    if (index < steps.length - 1) { index++; render(); }
+    else { index = 0; render(); }
+  });
+
+  function toast(message) {
+    const el = document.getElementById('toast');
+    el.textContent = message;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
+  document.getElementById('copyInstaller').addEventListener('click', async () => {
+    const url = new URL('Install DSH Pet.command', window.location.href);
+    const path = decodeURIComponent(url.pathname);
+    try {
+      await navigator.clipboard.writeText(path);
+      toast('安装器路径已复制：' + path);
+    } catch {
+      const area = document.createElement('textarea');
+      area.value = path;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+      toast('安装器路径已复制');
+    }
+  });
+
+  // 只有存在步骤时才进入向导模式；无 JS 时所有内容仍然可见。
+  if (steps.length) {
+    nav.hidden = false;
+    render();
+  }
+})();
+</script>
+</body>
+</html>

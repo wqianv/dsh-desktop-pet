@@ -13,6 +13,8 @@
 - `pets/`：7 个自带形象（dafeiyu / jingjing / whale-pixel / dpsk-girl / yuexinmiao / shenshen / snowball-red-scarf）
 - `dsh-launcher/`：DSH 插件（自动启动、状态/费用/余额桥、DSH 设置 → 桌宠 页面）
 - `docs/`：宠物包规范、行为 schema、测试清单、安装说明
+- `install-guide.html`：可在浏览器打开的交互式首装向导
+- `Install DSH Pet.command`：双击式安装器（自动处理 Gatekeeper、装插件、重启 DSH）
 - `skills/create-dsh-pet/`：给 Codex/DSH/Claude 等 agent 的桌宠生成 skill
 
 ## 安装
@@ -20,7 +22,7 @@
 看 `INSTALL.md`；简版：
 
 1. 解压到固定目录（别只挪 `.app`）
-2. DSH → 插件 → 本地目录 → 选 `dsh-launcher/` → 启用
+2. 双击 `Install DSH Pet.command`，按提示点两次「继续」；或手动在 DSH → 插件 → 本地目录 → 选 `dsh-launcher/` → 启用
 3. 完全退出 DSH 再打开
 4. 首次启动如果被 Gatekeeper 拦，右键 `DSH Pet.app` → 打开
 
