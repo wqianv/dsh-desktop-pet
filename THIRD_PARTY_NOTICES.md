@@ -13,6 +13,19 @@
 - The character is unofficial, not affiliated with or endorsed by DeepSeek or the
   original rights holders. Do not use commercially.
 
+## 对下游使用者的要求（重要）
+
+如果你（或其他人）复用本仓库的宠物包/素材：
+
+1. **禁止商用**：不得用于收费产品、付费分发、广告变现、商业交付等；商用需向
+   [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 作者取得单独授权。
+2. **保留声明**：再分发/修改时保留 `pets/dafeiyu/NOTICE.md`、`pets/dafeiyu/LICENSE`
+   与本文件；代码部分保留 MIT 版权与许可声明。
+3. **代码与素材分开**：本仓库代码（`src-tauri/`、`renderer/`、`tools/` 等）是 MIT；
+   宠物素材的限制不会因为代码是 MIT 而解除。
+4. 素材是上游 AI 生成动画/非官方 fan art，上游未额外授予角色/IP 权利；
+   公开分发或商用前请自行评估风险。
+
 ## Upstream MIT license (PC2005-cloud/dsh-pet)
 
 ```
