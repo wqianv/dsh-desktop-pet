@@ -46,6 +46,19 @@ npm run open
 
 **其他人复用本宠物包/素材的要求**：禁止商用（收费、付费分发、广告变现等，商用需联系上游作者）；再分发/修改时保留 `pets/dafeiyu/NOTICE.md`、`LICENSE` 和根目录 `THIRD_PARTY_NOTICES.md`；本仓库代码自身是 MIT，但不会因此解除素材的非商用限制。个人桌面使用没问题。
 
+## 随 DSH 启动（launcher 插件）
+
+`dsh-launcher/` 是一个极小的 DSH host 插件：DSH 启动时拉起桌宠，DSH 退出/卸载插件时关掉桌宠；DSH 被强杀时，桌宠带 `DSH_PET_MANAGED=1` 会自己检测 DSH Helper 进程并退出。
+
+安装（DSH 桌面端目前不允许外部 CLI 改 profile，需要走插件页）：
+
+1. DSH 左侧栏 → **插件** → 右上 **添加插件** → **本地目录**
+2. 填 `/Users/wqian/Dev/dsh-desktop-pet/dsh-launcher`（或你 clone 后的绝对路径）
+3. 安装后点 **立即启用**
+4. **完全退出 DSH 再打开**（插件层重启才组装）
+
+之后再打开 DSH，桌宠会自己出现；不需要手动 `npm run open`。细节见 [`dsh-launcher/README.md`](dsh-launcher/README.md)。
+
 ## 它怎么工作（Tauri 2）
 
 ```

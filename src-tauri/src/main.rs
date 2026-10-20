@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
@@ -271,6 +272,22 @@ impl Default for PetState {
             updated_at: 0,
         }
     }
+}
+
+/// DSH 桌面端主进程是否还在（--managed 模式的兜底：DSH 被强杀时桌宠自己退出）。
+fn dsh_running() -> bool {
+    // 注意：DSH 主进程有时不出现在 pgrep -f 的结果里（macOS 的 argv 可见性差异），
+    // 但它的 Helper 进程一定在；Helper 随 DSH 主进程退出而退出，足够做存活探测。
+    let pattern = std::env::var("DSH_PET_DSH_PROC")
+        .unwrap_or_else(|_| "DeepSeek Harness Helper".to_string());
+    Command::new("/usr/bin/pgrep")
+        .arg("-f")
+        .arg(&pattern)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 fn now_ms() -> u64 {
@@ -842,7 +859,11 @@ fn main() {
             open_dsh
         ])
         .setup(|app| {
-            log_msg("setup: creating pet window");
+            log_msg(&format!(
+                "setup: args={:?} managed_env={:?}",
+                std::env::args().collect::<Vec<_>>(),
+                std::env::var("DSH_PET_MANAGED").ok()
+            ));
             let window = app
                 .get_webview_window("pet")
                 .ok_or("missing pet window in tauri.conf.json")?;
@@ -862,6 +883,27 @@ fn main() {
             build_tray(app.handle())?;
             spawn_state_loop(app.handle().clone());
             write_config(&config);
+
+            // 由 DSH 启动器插件拉起时带 --managed：DSH 退出/被强杀后自己退出，
+            // 避免留下一个没有 DSH 可看的桌宠进程。
+            if std::env::args().any(|arg| arg == "--managed")
+                || std::env::var("DSH_PET_MANAGED").ok().as_deref() == Some("1")
+            {
+                log_msg("managed mode: watching DSH process");
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    // 刚被 DSH 拉起时给它一点启动宽限，避免 Helper 还没起全就误判。
+                    std::thread::sleep(Duration::from_secs(5));
+                    loop {
+                        if !dsh_running() {
+                            log_msg("managed mode: DSH is gone, exiting");
+                            handle.exit(0);
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_secs(3));
+                    }
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
