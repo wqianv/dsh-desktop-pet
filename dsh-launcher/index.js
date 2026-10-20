@@ -820,8 +820,18 @@ export function apply(ctx) {
   // —— 启动桌宠 + 注册桥 ——
   try {
     const autoStart = readAutoStart()
+    let startupCheck = null
     if (autoStart) {
       launchPet()
+      // DSH 启动时如果旧桌宠刚好还在运行，launchPet() 会跳过；旧插件 dispose 再把它杀掉，
+      // 就会出现「DSH 起来了但没桌宠」。5 秒后再兜底检查一次。
+      startupCheck = setTimeout(() => {
+        if (!disposed && !petRunning()) {
+          console.log('[dsh-pet] startup check: pet missing, launching')
+          launchPet()
+        }
+      }, 5000)
+      startupCheck.unref?.()
     } else {
       console.log('[dsh-pet] autoStart=false, bridge only（右键桌宠或托盘里打开「随 DSH 启动」后下次 DSH 生效）')
     }
@@ -850,6 +860,7 @@ export function apply(ctx) {
         /* ignore */
       }
       clearInterval(heartbeat)
+      if (startupCheck) clearTimeout(startupCheck)
       if (balanceTimer) clearInterval(balanceTimer)
       if (balanceInitialTimer) clearTimeout(balanceInitialTimer)
       for (const timer of idleTimers.values()) clearTimeout(timer)
