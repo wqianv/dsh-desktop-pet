@@ -8,7 +8,14 @@
  *
  * 改完设置后，桌宠会在 1s 内监听到 settings.json / icons/*.png 变化并应用。
  */
-window.__ModuleLoader__.load({
+// DSH 的 client-modules 对同一 id 重复执行 bundle 会直接抛 duplicate factory。
+// immediate entry 在某些 boot 路径里会被载入两次，这里做一次幂等保护；
+// 正常页面只执行一次，HMR 重新执行时保留已注册的 factory。
+if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
+  // already registered
+} else {
+  window.__DSH_DESKTOP_PET_CLIENT_BOOTED__ = true
+  window.__ModuleLoader__.load({
   id: 'dsh-desktop-pet',
   factory: (require) => {
     const module = { exports: {} }
@@ -254,4 +261,5 @@ window.__ModuleLoader__.load({
     exports.PetSettingsSection = PetSettingsSection
     return module.exports
   },
-})
+  })
+}
