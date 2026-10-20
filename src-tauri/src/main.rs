@@ -42,7 +42,6 @@ struct Config {
     x: Option<i32>,
     y: Option<i32>,
     visible: bool,
-    dsh_url: String,
 }
 
 impl Default for Config {
@@ -53,7 +52,6 @@ impl Default for Config {
             x: None,
             y: None,
             visible: true,
-            dsh_url: "http://127.0.0.1:51183".into(),
         }
     }
 }
@@ -1078,7 +1076,7 @@ fn show_context_menu(window: WebviewWindow) -> Result<(), String> {
         None::<&str>,
     )
     .map_err(|e| e.to_string())?;
-    let open_dsh_item = MenuItem::with_id(&window, "ctx-open-dsh", "打开 DSH", true, None::<&str>)
+    let open_dsh_item = MenuItem::with_id(&window, "ctx-open-dsh", "打开 DSH 窗口", true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let quit = MenuItem::with_id(&window, "ctx-quit", "退出", true, None::<&str>)
         .map_err(|e| e.to_string())?;
@@ -1121,14 +1119,31 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
-fn open_dsh_url() {
-    let config = read_config();
-    let _ = std::process::Command::new("open").arg(config.dsh_url).status();
+fn open_dsh_app() {
+    // 不要用 config 里可能过期的 web URL；直接激活 DSH 桌面应用。
+    let by_bundle = Command::new("open")
+        .args(["-b", "com.deepseek.dsh"])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if by_bundle {
+        return;
+    }
+    let by_name = Command::new("open")
+        .args(["-a", "DeepSeek Harness"])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if !by_name {
+        let _ = Command::new("open")
+            .arg("/Applications/DeepSeek Harness.app")
+            .status();
+    }
 }
 
 #[tauri::command]
 fn open_dsh() {
-    open_dsh_url();
+    open_dsh_app();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1370,7 +1385,7 @@ fn main() {
                     emit_display_settings(app);
                     schedule_tray_refresh(app);
                 }
-                "ctx-open-dsh" => open_dsh_url(),
+                "ctx-open-dsh" => open_dsh_app(),
                 "ctx-quit" => app.exit(0),
                 _ => {}
             }
