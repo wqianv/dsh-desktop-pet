@@ -9,7 +9,7 @@
  * - DSH 被强杀时桌宠带 DSH_PET_MANAGED=1 自己检测 DSH Helper 并退出。
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -31,6 +31,7 @@ const DEFAULT_PET_SETTINGS = {
   showBalance: true,
   showPrioritySessions: true,
   showCost: true,
+  packId: null,
   icons: { app: null, tray: null },
 }
 
@@ -389,6 +390,7 @@ function sanitizePetSettings(input) {
   for (const key of ['autoStart', 'showDockIcon', 'showTrayIcon', 'showBalance', 'showPrioritySessions', 'showCost']) {
     if (typeof input?.[key] === 'boolean') next[key] = input[key]
   }
+  if (typeof input?.packId === 'string' || input?.packId === null) next.packId = input.packId
   if (input?.icons && typeof input.icons === 'object') {
     for (const key of ['app', 'tray']) {
       const value = input.icons[key]
@@ -400,6 +402,50 @@ function sanitizePetSettings(input) {
 
 function petIconExists(kind) {
   return existsSync(path.join(ICON_DIR, `${kind}.png`))
+}
+
+function packRoots() {
+  const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+  return [
+    path.join(PROJECT, 'pets'),
+    path.join(dshHome, 'pets'),
+    path.join(os.homedir(), '.dsh-desktop-pet', 'pets'),
+  ]
+}
+
+function listPacks() {
+  const byId = new Map()
+  for (const root of packRoots()) {
+    let entries = []
+    try { entries = readdirSync(root, { withFileTypes: true }) } catch { continue }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const dir = path.join(root, entry.name)
+      let manifest
+      try { manifest = JSON.parse(readFileSync(path.join(dir, 'pet.json'), 'utf8')) } catch { continue }
+      const id = typeof manifest.id === 'string' && manifest.id ? manifest.id : entry.name
+      byId.set(id, {
+        id,
+        displayName: typeof manifest.displayName === 'string' && manifest.displayName ? manifest.displayName : id,
+        description: typeof manifest.description === 'string' ? manifest.description : '',
+        author: typeof manifest.author === 'string' ? manifest.author : '',
+        license: typeof manifest.license === 'string' ? manifest.license : '',
+        version: typeof manifest.version === 'string' ? manifest.version : '',
+        dir,
+      })
+    }
+  }
+  return [...byId.values()].sort((a, b) => a.displayName.localeCompare(b.displayName))
+}
+
+function activePackId(packs) {
+  const settings = readPetSettings()
+  if (typeof settings.packId === 'string' && settings.packId) return settings.packId
+  try {
+    const config = JSON.parse(readFileSync(path.join(PROJECT, '.userdata', 'config.json'), 'utf8'))
+    if (typeof config.packId === 'string' && config.packId) return config.packId
+  } catch {}
+  return packs[0]?.id || null
 }
 
 function registerPetApi(ctx) {
@@ -441,6 +487,17 @@ function registerPetApi(ctx) {
       } catch (err) {
         return jsonResponse(res, 400, { ok: false, error: err.message })
       }
+    },
+  })
+
+  web.register({
+    kind: 'exact',
+    path: '/dsh-pet/api/packs',
+    handler: async (req, res) => {
+      if (!allow(req)) return jsonResponse(res, 403, { ok: false, error: 'forbidden' })
+      if (req.method !== 'GET') return jsonResponse(res, 405, { ok: false })
+      const packs = listPacks()
+      return jsonResponse(res, 200, { ok: true, packs, active: activePackId(packs) })
     },
   })
 

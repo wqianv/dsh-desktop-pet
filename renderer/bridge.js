@@ -25,6 +25,16 @@
 
     getSettings: () => invoke('get_settings'),
 
+    setPack(packId) {
+      return invoke('set_pack', { packId })
+    },
+
+    onPack(callback) {
+      if (listen) {
+        listen('pet:pack', (event) => callback(event.payload)).catch(() => {})
+      }
+    },
+
     onSettings(callback) {
       if (listen) {
         listen('pet:settings', (event) => callback(event.payload)).catch(() => {})

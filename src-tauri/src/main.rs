@@ -122,6 +122,7 @@ struct PetSettings {
     show_balance: bool,
     show_priority_sessions: bool,
     show_cost: bool,
+    pack_id: Option<String>,
     icons: IconSettings,
 }
 
@@ -135,6 +136,7 @@ impl Default for PetSettings {
             show_balance: true,
             show_priority_sessions: true,
             show_cost: true,
+            pack_id: None,
             icons: IconSettings::default(),
         }
     }
@@ -467,6 +469,140 @@ fn load_packs() -> Vec<PackView> {
         an.cmp(bn)
     });
     packs
+}
+
+fn load_pack_by_id(pack_id: &str) -> Option<PackView> {
+    let mut found: Option<PackView> = None;
+    for root in pack_roots() {
+        let Ok(entries) = fs::read_dir(&root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let Ok(text) = fs::read_to_string(dir.join("pet.json")) else {
+                continue;
+            };
+            let Ok(manifest) = serde_json::from_str::<Value>(&text) else {
+                continue;
+            };
+            let id = manifest
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| {
+                    dir.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("pet")
+                        .to_string()
+                });
+            if id == pack_id {
+                if let Some(pack) = load_one_pack(&dir) {
+                    found = Some(pack);
+                }
+            }
+        }
+    }
+    found
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PackMeta {
+    id: String,
+    display_name: String,
+    description: String,
+    author: String,
+    license: String,
+    version: String,
+}
+
+fn list_pack_meta() -> Vec<PackMeta> {
+    let mut by_id: HashMap<String, PackMeta> = HashMap::new();
+    for root in pack_roots() {
+        let Ok(entries) = fs::read_dir(&root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let Ok(text) = fs::read_to_string(dir.join("pet.json")) else {
+                continue;
+            };
+            let Ok(manifest) = serde_json::from_str::<Value>(&text) else {
+                continue;
+            };
+            let id = manifest
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| {
+                    dir.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("pet")
+                        .to_string()
+                });
+            let get = |key: &str| {
+                manifest
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string()
+            };
+            by_id.insert(
+                id.clone(),
+                PackMeta {
+                    id,
+                    display_name: {
+                        let name = get("displayName");
+                        if name.is_empty() {
+                            get("id")
+                        } else {
+                            name
+                        }
+                    },
+                    description: get("description"),
+                    author: get("author"),
+                    license: get("license"),
+                    version: get("version"),
+                },
+            );
+        }
+    }
+    let mut packs: Vec<PackMeta> = by_id.into_values().collect();
+    packs.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+    packs
+}
+
+fn activate_pack(app: &AppHandle, pack_id: &str) -> bool {
+    let Some(pack) = load_pack_by_id(pack_id) else {
+        log_msg(&format!("pack: not found {pack_id}"));
+        return false;
+    };
+    let mut config = read_config();
+    config.pack_id = pack.id.clone();
+    write_config(&config);
+    let mut settings = read_settings();
+    settings.pack_id = Some(pack.id.clone());
+    write_settings(&settings);
+    let _ = app.emit("pet:pack", &pack);
+    log_msg(&format!("pack: activated {}", pack.id));
+    true
+}
+
+/// 菜单事件里直接加载 2.5MB 图集会卡菜单，延迟到事件返回后再切换。
+fn activate_pack_deferred(app: &AppHandle, pack_id: &str) {
+    let app = app.clone();
+    let pack_id = pack_id.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(150));
+        activate_pack(&app, &pack_id);
+        schedule_tray_refresh(&app);
+    });
 }
 
 /* ------------------------------------------------------------------ */
@@ -871,10 +1007,23 @@ fn collect_state() -> PetState {
     }
 }
 
+fn selected_pack_signature() -> (Option<SystemTime>, Option<SystemTime>, Option<SystemTime>, Option<SystemTime>) {
+    let Some(dir) = find_pack_dir(&read_config().pack_id) else {
+        return (None, None, None, None);
+    };
+    (
+        file_modified(&dir.join("pet.json")),
+        file_modified(&dir.join("behavior.json")),
+        file_modified(&dir.join("spritesheet.webp")),
+        file_modified(&dir.join("spritesheet.png")),
+    )
+}
+
 fn spawn_state_loop(app: AppHandle) {
     std::thread::spawn(move || {
         let mut ticks = 0u64;
         let mut last_settings_sig = settings_signature();
+        let mut last_pack_sig = selected_pack_signature();
         loop {
             // DSH 设置页 / 手动编辑 settings.json 或 icons/*.png 后，1s 内应用。
             let sig = settings_signature();
@@ -882,10 +1031,29 @@ fn spawn_state_loop(app: AppHandle) {
                 last_settings_sig = sig;
                 let handle = app.clone();
                 let _ = app.run_on_main_thread(move || {
+                    let settings = read_settings();
+                    if let Some(pack_id) = settings.pack_id.clone() {
+                        if pack_id != read_config().pack_id {
+                            activate_pack(&handle, &pack_id);
+                        }
+                    }
                     rebuild_tray(&handle);
                     apply_icons(&handle);
                     emit_display_settings(&handle);
                     log_msg("settings: reloaded from external file change");
+                });
+            }
+            // 当前 pack 的文件被编辑（热更新）时重新加载并推给前端。
+            let pack_sig = selected_pack_signature();
+            if pack_sig != last_pack_sig {
+                last_pack_sig = pack_sig;
+                let handle = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    let pack_id = read_config().pack_id;
+                    if let Some(pack) = load_pack_by_id(&pack_id) {
+                        let _ = handle.emit("pet:pack", &pack);
+                        log_msg(&format!("pack: hot reloaded {pack_id}"));
+                    }
                 });
             }
             let state = collect_state();
@@ -954,6 +1122,18 @@ fn get_settings() -> DisplaySettings {
 #[tauri::command]
 fn reload_packs() -> Vec<PackView> {
     load_packs()
+}
+
+#[tauri::command]
+fn list_packs() -> Vec<PackMeta> {
+    list_pack_meta()
+}
+
+#[tauri::command]
+fn set_pack(app: AppHandle, pack_id: String) -> Result<PackView, String> {
+    let pack = load_pack_by_id(&pack_id).ok_or_else(|| format!("pack not found: {pack_id}"))?;
+    activate_pack(&app, &pack.id);
+    Ok(pack)
 }
 
 fn balance_text(account: Option<&Value>) -> String {
@@ -1147,6 +1327,38 @@ fn icon_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<tauri::W
     Submenu::with_items(app, "自定义图标", true, &[&dock, &tray, &open, &reload, &reset])
 }
 
+fn pack_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<tauri::Wry>> {
+    let packs = list_pack_meta();
+    let current = read_config().pack_id;
+    let mut items: Vec<CheckMenuItem<tauri::Wry>> = Vec::new();
+    if packs.is_empty() {
+        items.push(CheckMenuItem::with_id(
+            app,
+            format!("{prefix}-pack-empty"),
+            "没有可用宠物包",
+            false,
+            false,
+            None::<&str>,
+        )?);
+    } else {
+        for pack in packs.iter().take(20) {
+            items.push(CheckMenuItem::with_id(
+                app,
+                format!("{prefix}-pack:{}", pack.id),
+                format!("{}{}", pack.display_name, if pack.id == current { "  ✓" } else { "" }),
+                true,
+                pack.id == current,
+                None::<&str>,
+            )?);
+        }
+    }
+    let refs: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = items
+        .iter()
+        .map(|item| item as &dyn tauri::menu::IsMenuItem<tauri::Wry>)
+        .collect();
+    Submenu::with_items(app, "更换形象", true, &refs)
+}
+
 fn settings_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<tauri::Wry>> {
     let settings = read_settings();
     let balance = CheckMenuItem::with_id(app, format!("{prefix}-balance"), "显示余额", true, settings.show_balance, None::<&str>)?;
@@ -1201,6 +1413,7 @@ fn show_context_menu(window: WebviewWindow) -> Result<(), String> {
     let state = collect_state();
     let settings_menu = settings_submenu(window.app_handle(), "ctx-set").map_err(|e| e.to_string())?;
     let priority_menu = priority_submenu(window.app_handle(), "ctx").map_err(|e| e.to_string())?;
+    let pack_menu = pack_submenu(window.app_handle(), "ctx").map_err(|e| e.to_string())?;
     let balance_item = MenuItem::with_id(
         &window,
         "ctx-balance",
@@ -1229,6 +1442,7 @@ fn show_context_menu(window: WebviewWindow) -> Result<(), String> {
     if settings.show_priority_sessions {
         items.push(&priority_menu);
     }
+    items.push(&pack_menu);
     items.push(&settings_menu);
     items.push(&show_icons);
     items.push(&open_dsh_item);
@@ -1422,6 +1636,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let state = collect_state();
     let settings_menu = settings_submenu(app, "set")?;
     let priority_menu = priority_submenu(app, "tray")?;
+    let pack_menu = pack_submenu(app, "tray")?;
     let balance_item = MenuItem::with_id(
         app,
         "tray-balance",
@@ -1442,6 +1657,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     if settings.show_priority_sessions {
         items.push(&priority_menu);
     }
+    items.push(&pack_menu);
     items.push(&settings_menu);
     items.push(&toggle);
     items.push(&reload_icons);
@@ -1461,6 +1677,10 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(move |app, event| {
             let id = event.id().as_ref();
+            if let Some(pack_id) = id.strip_prefix("tray-pack:") {
+                activate_pack_deferred(app, pack_id);
+                return;
+            }
             if let Some(action) = id.strip_prefix("set-icon-") {
                 handle_icon_action(app, action);
                 return;
@@ -1523,6 +1743,10 @@ fn main() {
     tauri::Builder::default()
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
+            if let Some(pack_id) = id.strip_prefix("ctx-pack:") {
+                activate_pack_deferred(app, pack_id);
+                return;
+            }
             if let Some(action) = id.strip_prefix("ctx-set-icon-") {
                 handle_icon_action(app, action);
                 return;
@@ -1549,6 +1773,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             bootstrap,
             reload_packs,
+            list_packs,
+            set_pack,
             poll_state,
             frontend_ready,
             frontend_log,
@@ -1570,7 +1796,21 @@ fn main() {
                 .get_webview_window("pet")
                 .ok_or("missing pet window in tauri.conf.json")?;
 
-            let config = read_config();
+            let mut config = read_config();
+            let mut startup_settings = read_settings();
+            if let Some(pack_id) = startup_settings.pack_id.clone() {
+                if find_pack_dir(&pack_id).is_some() {
+                    config.pack_id = pack_id;
+                } else {
+                    // 选中的 pack 被删掉/改名了：回落到 config 里的上一个有效 pack。
+                    log_msg(&format!("pack: selected {pack_id} missing, fallback to {}", config.pack_id));
+                    startup_settings.pack_id = Some(config.pack_id.clone());
+                    write_settings(&startup_settings);
+                }
+            } else {
+                startup_settings.pack_id = Some(config.pack_id.clone());
+                write_settings(&startup_settings);
+            }
             let width = (config.size as f64 * 192.0 / 208.0) as u32 + 96;
             let height = config.size + 120;
             let _ = window.set_size(tauri::PhysicalSize::new(width, height));

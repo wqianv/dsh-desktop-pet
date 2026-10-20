@@ -625,6 +625,11 @@ async function boot() {
   showBubbleForPhase(state)
 
   window.petAPI.onState(onState)
+  if (window.petAPI.onPack) {
+    window.petAPI.onPack((pack) => {
+      if (pack && pack.id) applyPack(pack)
+    })
+  }
   window.petAPI.onPacks((nextPacks) => {
     packs = nextPacks
     const next = packById(activePack && activePack.id) || packs[0]

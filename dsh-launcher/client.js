@@ -41,6 +41,9 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
       '.pet-settings .pet-btn{background:transparent;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);border-radius:6px;font-size:12px;height:28px;padding:0 10px;cursor:pointer}',
       '.pet-settings .pet-btn:hover{background:rgba(127,127,127,.08)}',
       '.pet-settings .pet-btn.pet-primary{background:var(--dsw-alias-brand-primary);border-color:transparent;color:#fff}',
+      '.pet-settings .pet-select{background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;color:var(--dsw-alias-label-primary);font-size:12.5px;height:30px;padding:0 8px;min-width:220px;outline:none}',
+      '.pet-settings .pet-select:focus-visible{border-color:var(--dsw-alias-brand-primary)}',
+      '.pet-settings .pet-pack-desc{color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:17px;margin-top:6px;max-width:420px}',
       '.pet-settings .pet-status{font-size:12px;line-height:18px;margin-top:10px;color:var(--dsw-alias-label-tertiary);min-height:18px}',
       '.pet-settings .pet-err{color:var(--dsw-alias-state-error-primary)}',
       '.pet-settings .pet-badge{display:inline-block;font-size:11px;line-height:16px;padding:1px 7px;border-radius:999px;background:rgba(127,127,127,.14);color:var(--dsw-alias-label-secondary);margin-left:6px}',
@@ -103,6 +106,8 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
     function PetSettingsSection() {
       useStyleOnce()
       const [settings, setSettings] = useState(null)
+      const [packs, setPacks] = useState([])
+      const [activePack, setActivePack] = useState(null)
       const [icons, setIcons] = useState({ app: false, tray: false })
       const [message, setMessage] = useState('')
       const [error, setError] = useState('')
@@ -111,10 +116,17 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
       const load = useCallback(async () => {
         setError('')
         try {
-          const response = await fetch(`${API}/settings`, { headers: { accept: 'application/json' } })
-          const json = await response.json().catch(() => ({}))
-          if (!response.ok || !json.ok) throw new Error(json.error || `HTTP ${response.status}`)
+          const [settingsResponse, packsResponse] = await Promise.all([
+            fetch(`${API}/settings`, { headers: { accept: 'application/json' } }),
+            fetch(`${API}/packs`, { headers: { accept: 'application/json' } }),
+          ])
+          const json = await settingsResponse.json().catch(() => ({}))
+          if (!settingsResponse.ok || !json.ok) throw new Error(json.error || `HTTP ${settingsResponse.status}`)
+          const packJson = await packsResponse.json().catch(() => ({}))
+          if (!packsResponse.ok || !packJson.ok) throw new Error(packJson.error || `HTTP ${packsResponse.status}`)
           setSettings(json.settings)
+          setPacks(packJson.packs || [])
+          setActivePack(packJson.active || null)
           setIcons(json.icons || { app: false, tray: false })
         } catch (err) {
           setError(`读取桌宠设置失败：${err.message}`)
@@ -143,7 +155,15 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
         setError('')
         try {
           await postSettings(next)
-          setMessage('已保存；桌宠会在 1 秒内应用。')
+          if (key === 'packId') {
+            setMessage('已切换形象；桌宠热加载中，约 1 秒完成。')
+            fetch(`${API}/packs`, { headers: { accept: 'application/json' } })
+              .then((r) => r.json())
+              .then((j) => { if (j.ok) { setPacks(j.packs || []); setActivePack(j.active || null) } })
+              .catch(() => {})
+          } else {
+            setMessage('已保存；桌宠会在 1 秒内应用。')
+          }
         } catch (err) {
           setError(`保存失败：${err.message}`)
           await load()
@@ -200,6 +220,20 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
         }
       }, [])
 
+      const refreshPacks = useCallback(async () => {
+        setError('')
+        try {
+          const response = await fetch(`${API}/packs`, { headers: { accept: 'application/json' } })
+          const json = await response.json().catch(() => ({}))
+          if (!response.ok || !json.ok) throw new Error(json.error || `HTTP ${response.status}`)
+          setPacks(json.packs || [])
+          setActivePack(json.active || null)
+          setMessage(`已重新扫描，共 ${json.packs?.length || 0} 个形象。`)
+        } catch (err) {
+          setError(`扫描形象失败：${err.message}`)
+        }
+      }, [])
+
       if (!settings) {
         return h('div', { className: 'pet-settings' },
           h('h3', null, '桌宠'),
@@ -211,6 +245,30 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
         h('p', { className: 'pet-intro' },
           '透明置顶的独立桌宠；这里控制它显示什么、是否随 DSH 启动，以及 Dock / 菜单栏图标。',
           '设置保存在 ', h('code', null, '~/.dsh-desktop-pet/settings.json'), '。'),
+        h('div', { className: 'pet-group' }, '形象'),
+        h('div', { className: 'pet-row' },
+          h('div', null,
+            h('div', { className: 'pet-label' }, '当前桌宠形象'),
+            h('div', { className: 'pet-hint' }, '选中后热切换，不需要重启 DSH 或桌宠。把新的 pet pack 目录放到 ~/.dsh-desktop-pet/pets/<id>/ 或项目 pets/ 后点「刷新」。'),
+            (() => {
+              const selected = packs.find((pack) => pack.id === (settings.packId || activePack))
+              return selected ? h('div', { className: 'pet-pack-desc' },
+                selected.description || '',
+                selected.license ? ` · ${selected.license}` : '') : null
+            })()),
+          h('div', { className: 'pet-icon-actions' },
+            h('select', {
+              className: 'pet-select',
+              value: settings.packId || activePack || '',
+              disabled: busy || packs.length === 0,
+              onChange: (event) => update('packId', event.target.value),
+            }, packs.map((pack) => h('option', { key: pack.id, value: pack.id }, pack.displayName || pack.id))),
+            h('button', {
+              className: 'pet-btn',
+              type: 'button',
+              disabled: busy,
+              onClick: refreshPacks,
+            }, '刷新'))),
         h('div', { className: 'pet-group' }, '显示'),
         h('div', null, TOGGLES.map(([key, label, hint]) => h('div', { className: 'pet-row', key },
           h('div', null,

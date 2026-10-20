@@ -13,6 +13,7 @@
 - **真桌宠**：透明、无边框、置顶、skipTaskbar、点击穿透；托盘显示/隐藏/退出。
 - **状态桥**：DSH host 插件订阅 `session/event`，把 `thinking/tool/waiting/done/failed/idle` 写到本地 state 文件；桌宠只读这个文件，**不再每秒解压 session JSONL**（插件不在时自动回退 JSONL）。
 - **行为 mod**：`pets/<id>/behavior.json` 定义动画表、阶段映射、点击/拖拽互动、挂机小动作、气泡和费用模板；非程序员也能改。
+- **更换形象（热加载）**：DSH 设置 → 桌宠 → 形象，或右键 → 更换形象；选中后约 1 秒切换，不重启 DSH/桌宠。新增 pack 目录后点「刷新」即可。
 - **17 段动画**：待机/跑动/挥手/跳跃/出错/等待/干活/思考 + 拖拽/摸头/害羞/打瞌睡/吃白饭/伸懒腰/跳舞/发呆。
 - **费用估算**：每轮 `turn/end` 后按 DeepSeek 峰谷价目算本轮和整段会话的 token 费用，气泡显示 `本轮 ¥x · 本会话 ¥y`。
 - **余额与高优会话**：host 插件读取 DSH 账户余额；右键/托盘菜单显示余额和「等待确认 / 出错」的高优会话列表，也可以选择不显示。
@@ -155,6 +156,16 @@ Tauri WebviewWindow（透明/无边框/置顶/skipTaskbar）
 0 idle | 1 walk-right | 2 walk-left | 3 wave | 4 jump | 5 sad | 6 wait | 7 work | 8 think
 9 drag | 10 pet | 11 shy | 12 sleep | 13 eat | 14 stretch | 15 dance | 16 daydream
 ```
+
+## 更换桌宠形象（热加载）
+
+**DSH 设置 → 桌宠 → 形象** 选择宠物包；保存后桌宠热切换，约 1 秒生效，不需要重启。右键桌宠 → **更换形象** 也可以快速切。
+
+- 可用 pack 搜索顺序：项目 `pets/` → `$DSH_HOME/pets/` → `~/.dsh-desktop-pet/pets/`
+- 把新的 pet pack 目录（含 `pet.json`、图集、可选 `behavior.json`）放进以上任一目录，点设置页的 **刷新** 就能看到
+- 切换后会立即重载图集/行为；**手工编辑当前 pack 的 `pet.json` / 图集 / `behavior.json` 也会在 1 秒内热重载**
+- 选中的 pack 被删除/改名时，自动回落到配置里的上一个有效 pack
+- 当前 pack id 存在 `~/.dsh-desktop-pet/settings.json` 的 `packId`，同时同步到项目 `.userdata/config.json`
 
 ## 设置与自定义显示
 
