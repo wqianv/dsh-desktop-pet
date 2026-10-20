@@ -168,6 +168,7 @@ Tauri WebviewWindow（透明/无边框/置顶/skipTaskbar）
 | 随 DSH 启动 | ✅ | 下次 DSH 启动时自动拉起桌宠 |
 | 显示 Dock 图标 | ❌ | 程序坞图标 |
 | 显示菜单栏图标 | ❌ | 右上角托盘图标；隐藏后右键桌宠仍可控制 |
+| 自定义图标 | - | 设置 → 自定义图标：选 Dock/菜单栏 PNG，或打开图标目录手动放 |
 
 全部持久化到 `~/.dsh-desktop-pet/settings.json`：
 
@@ -201,9 +202,19 @@ DSH 启动时插件会自动拉起桌宠；DSH 退出时关掉，DSH 被强杀�
 
 ## 自定义图标
 
-**默认不显示 Dock 图标和菜单栏图标**（`showDockIcon=false`、`showTrayIcon=false`），只留桌面上的桌宠窗口；**右键桌宠**可以打开「显示图标」和「随 DSH 启动」菜单。
+**默认不显示 Dock 图标和菜单栏图标**（`showDockIcon=false`、`showTrayIcon=false`），只留桌面上的桌宠窗口；**右键桌宠**可以打开「显示图标」「设置」「自定义图标」等菜单。
 
-显示图标后，图标使用项目内我们自己画的那套（`src-tauri/icons/`）；想换自定义图标，把 PNG 放到：
+### 在设置里换图标
+
+右键桌宠（或托盘）→ **设置** → **自定义图标**：
+
+- **选择 Dock 图标…**：弹出文件选择器，选一张 PNG，自动复制到 `~/.dsh-desktop-pet/icons/app.png`
+- **选择菜单栏图标…**：同上，复制到 `~/.dsh-desktop-pet/icons/tray.png`
+- **打开图标目录…**：直接打开 `~/.dsh-desktop-pet/icons/`
+- **重载自定义图标**：手动替换文件后点这个立即生效
+- **恢复默认图标**：清掉自定义图标，回到项目内我们自己画的那套
+
+也可以不走菜单，直接把 PNG 放到：
 
 ```
 ~/.dsh-desktop-pet/icons/app.png     # Dock 图标，建议 512×512 / 1024×1024

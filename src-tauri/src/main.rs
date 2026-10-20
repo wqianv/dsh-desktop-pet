@@ -1007,6 +1007,121 @@ fn priority_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<taur
     Submenu::with_items(app, format!("高优会话 ({})", priority.len()), true, &refs)
 }
 
+fn choose_png() -> Option<PathBuf> {
+    let script = r#"POSIX path of (choose file with prompt "选择 PNG 图标")"#;
+    let output = Command::new("osascript").arg("-e").arg(script).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    let bytes = fs::read(&path).ok()?;
+    if !bytes.starts_with(b"\x89PNG") {
+        log_msg(&format!("icon: picked file is not PNG: {}", path.display()));
+        return None;
+    }
+    Some(path)
+}
+
+fn install_icon(kind: &str, source: &Path) -> bool {
+    let bytes = match fs::read(source) {
+        Ok(bytes) => bytes,
+        Err(_) => return false,
+    };
+    if !bytes.starts_with(b"\x89PNG") {
+        return false;
+    }
+    let dir = settings_dir().join("icons");
+    if fs::create_dir_all(&dir).is_err() {
+        return false;
+    }
+    let target = dir.join(format!("{kind}.png"));
+    if fs::write(&target, &bytes).is_err() {
+        return false;
+    }
+    let mut settings = read_settings();
+    let relative = format!("icons/{kind}.png");
+    if kind == "app" {
+        settings.icons.app = Some(relative);
+    } else {
+        settings.icons.tray = Some(relative);
+    }
+    write_settings(&settings);
+    log_msg(&format!("icon: installed {} -> {}", kind, target.display()));
+    true
+}
+
+fn apply_default_icons(app: &AppHandle) {
+    let app = app.clone();
+    let _ = app.clone().run_on_main_thread(move || {
+        let _ = set_dock_icon(include_bytes!("../icons/128x128@2x.png"));
+        if let Some(tray) = app.tray_by_id("pet-tray") {
+            if let Ok(image) = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png")) {
+                let _ = tray.set_icon(Some(image));
+            }
+        }
+    });
+}
+
+fn handle_icon_action(app: &AppHandle, action: &str) {
+    let app = app.clone();
+    let action = action.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(250));
+        match action.as_str() {
+            "dock" | "tray" => {
+                let kind = if action == "dock" { "app" } else { "tray" };
+                let Some(path) = choose_png() else {
+                    log_msg("icon: picker cancelled or non-PNG");
+                    return;
+                };
+                if !install_icon(kind, &path) {
+                    log_msg("icon: install failed");
+                    return;
+                }
+                let app_main = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    apply_icons(&app_main);
+                    schedule_tray_refresh(&app_main);
+                });
+            }
+            "open" => {
+                let dir = settings_dir().join("icons");
+                let _ = fs::create_dir_all(&dir);
+                let _ = Command::new("open").arg(dir).status();
+            }
+            "reload" => {
+                let app_main = app.clone();
+                let _ = app.run_on_main_thread(move || apply_icons(&app_main));
+            }
+            "reset" => {
+                let mut settings = read_settings();
+                settings.icons.app = None;
+                settings.icons.tray = None;
+                write_settings(&settings);
+                for name in ["app.png", "tray.png"] {
+                    let _ = fs::remove_file(settings_dir().join("icons").join(name));
+                }
+                apply_default_icons(&app);
+                let app_main = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    apply_icons(&app_main);
+                    schedule_tray_refresh(&app_main);
+                });
+            }
+            _ => {}
+        }
+    });
+}
+
+fn icon_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<tauri::Wry>> {
+    let dock = MenuItem::with_id(app, format!("{prefix}-icon-dock"), "选择 Dock 图标…", true, None::<&str>)?;
+    let tray = MenuItem::with_id(app, format!("{prefix}-icon-tray"), "选择菜单栏图标…", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, format!("{prefix}-icon-open"), "打开图标目录…", true, None::<&str>)?;
+    let reload = MenuItem::with_id(app, format!("{prefix}-icon-reload"), "重载自定义图标", true, None::<&str>)?;
+    let reset = MenuItem::with_id(app, format!("{prefix}-icon-reset"), "恢复默认图标", true, None::<&str>)?;
+    Submenu::with_items(app, "自定义图标", true, &[&dock, &tray, &open, &reload, &reset])
+}
+
 fn settings_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<tauri::Wry>> {
     let settings = read_settings();
     let balance = CheckMenuItem::with_id(app, format!("{prefix}-balance"), "显示余额", true, settings.show_balance, None::<&str>)?;
@@ -1015,11 +1130,12 @@ fn settings_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<taur
     let autostart = CheckMenuItem::with_id(app, format!("{prefix}-autostart"), "随 DSH 启动", true, settings.auto_start, None::<&str>)?;
     let dock = CheckMenuItem::with_id(app, format!("{prefix}-dock"), "显示 Dock 图标", true, settings.show_dock_icon, None::<&str>)?;
     let tray = CheckMenuItem::with_id(app, format!("{prefix}-tray"), "显示菜单栏图标", true, settings.show_tray_icon, None::<&str>)?;
+    let icons = icon_submenu(app, prefix)?;
     Submenu::with_items(
         app,
         "设置",
         true,
-        &[&balance, &priority, &cost, &autostart, &dock, &tray],
+        &[&balance, &priority, &cost, &autostart, &dock, &tray, &icons],
     )
 }
 
@@ -1313,6 +1429,10 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(move |app, event| {
             let id = event.id().as_ref();
+            if let Some(action) = id.strip_prefix("set-icon-") {
+                handle_icon_action(app, action);
+                return;
+            }
             if let Some(key) = id.strip_prefix("set-") {
                 toggle_setting(app, key);
                 return;
@@ -1371,6 +1491,10 @@ fn main() {
     tauri::Builder::default()
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
+            if let Some(action) = id.strip_prefix("ctx-set-icon-") {
+                handle_icon_action(app, action);
+                return;
+            }
             if let Some(key) = id.strip_prefix("ctx-set-") {
                 toggle_setting(app, key);
                 return;
