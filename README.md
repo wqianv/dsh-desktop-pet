@@ -169,7 +169,7 @@ Tauri WebviewWindow（透明/无边框/置顶/skipTaskbar）
 | 显示 Dock 图标 | ❌ | 程序坞图标 |
 | 显示菜单栏图标 | ❌ | 右上角托盘图标；隐藏后右键桌宠仍可控制 |
 
-| 自定义图标 | - | 上传 Dock/菜单栏 PNG，或恢复默认图标 |
+| 自定义图标 | - | 选择本地 Dock/菜单栏 PNG，或恢复默认图标 |
 
 全部持久化到 `~/.dsh-desktop-pet/settings.json`：
 

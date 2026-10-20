@@ -91,7 +91,7 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
             disabled: busy,
             onClick: () => inputRef.current && inputRef.current.click(),
             type: 'button',
-          }, '上传 PNG…'),
+          }, '选择 PNG…'),
           exists ? h('button', {
             className: 'pet-btn',
             disabled: busy,
@@ -171,9 +171,9 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
           const json = await response.json().catch(() => ({}))
           if (!response.ok || !json.ok) throw new Error(json.error || `HTTP ${response.status}`)
           setIcons(json.icons || { app: false, tray: false })
-          setMessage(kind === 'app' ? 'Dock 图标已更新。' : '菜单栏图标已更新。')
+          setMessage(kind === 'app' ? 'Dock 图标已保存到本地。' : '菜单栏图标已保存到本地。')
         } catch (err) {
-          setError(`图标上传失败：${err.message}`)
+          setError(`图标保存失败：${err.message}`)
         } finally {
           setBusy(false)
         }
@@ -223,6 +223,7 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
             onChange: (event) => update(key, event.target.checked),
           })))),
         h('div', { className: 'pet-group' }, '图标'),
+        h('div', { className: 'pet-hint' }, '选择本地 PNG 后会复制到 ~/.dsh-desktop-pet/icons/，不会上传到网络。'),
         h(IconRow, {
           kind: 'app',
           title: 'Dock 图标',

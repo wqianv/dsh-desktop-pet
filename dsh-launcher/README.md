@@ -1,6 +1,6 @@
 # dsh-desktop-pet-launcher
 
-DSH host 插件：**随 DSH 启动桌宠** + **把 DSH 会话状态/费用写到本地 state 文件**；client 半边在 **DSH 设置页 → 桌宠** 提供显示开关和图标上传。
+DSH host 插件：**随 DSH 启动桌宠** + **把 DSH 会话状态/费用写到本地 state 文件**；client 半边在 **DSH 设置页 → 桌宠** 提供显示开关和本地图标选择。
 
 ## 安装（DSH 桌面端）
 
@@ -33,7 +33,7 @@ DSH host 插件：**随 DSH 启动桌宠** + **把 DSH 会话状态/费用写到
 
 - `GET /dsh-pet/api/settings` → 当前设置 + 图标是否存在
 - `POST /dsh-pet/api/settings` → 只接受已知布尔字段和 icons 路径
-- `POST /dsh-pet/api/icon` → `{kind:'app'|'tray', dataUrl}` 上传 PNG；`{kind, reset:true}` 恢复默认
+- `POST /dsh-pet/api/icon` → `{kind:'app'|'tray', dataUrl}` 把本地 PNG 写入 `icons/`；`{kind, reset:true}` 恢复默认
 
 桌宠 Rust 侧每秒检查 `settings.json` / `icons/*.png` 的 mtime，变化后自动应用图标/可见性/显示项。更新插件后第一次需要重启 DSH 让 client bundle 重新装配。
 
