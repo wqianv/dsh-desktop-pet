@@ -1,0 +1,257 @@
+/**
+ * DSH 设置页 · 桌宠 section
+ *
+ * 与 host 半边通过同源路由通信：
+ *   GET  /dsh-pet/api/settings
+ *   POST /dsh-pet/api/settings
+ *   POST /dsh-pet/api/icon
+ *
+ * 改完设置后，桌宠会在 1s 内监听到 settings.json / icons/*.png 变化并应用。
+ */
+window.__ModuleLoader__.load({
+  id: 'dsh-desktop-pet',
+  factory: (require) => {
+    const module = { exports: {} }
+    const exports = module.exports
+    Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' })
+
+    const React = require('react')
+    const { createElement: h, useCallback, useEffect, useRef, useState } = React
+    const API = '/dsh-pet/api'
+    const CSS_TAG = 'dsh-desktop-pet/settings.css'
+    const CSS = [
+      '.pet-settings{max-width:720px;color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:6px}',
+      '.pet-settings h3{margin:0;font-size:16px;font-weight:500;line-height:24px}',
+      '.pet-settings .pet-intro{color:var(--dsw-alias-label-tertiary);margin:0 0 4px;font-size:13px;line-height:20px}',
+      '.pet-settings .pet-group{margin-top:16px;font-size:13px;font-weight:600;line-height:20px}',
+      '.pet-settings .pet-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px 20px;padding:10px 0;border-bottom:.5px solid var(--dsw-alias-border-l2);flex-wrap:wrap}',
+      '.pet-settings .pet-row:last-child{border-bottom:none}',
+      '.pet-settings .pet-row>div:first-child{flex:1;min-width:190px}',
+      '.pet-settings .pet-label{font-size:13px;line-height:19px}',
+      '.pet-settings .pet-hint{color:var(--dsw-alias-label-tertiary);margin-top:3px;font-size:11.5px;line-height:17px}',
+      '.pet-settings input[type=checkbox]{width:16px;height:16px;accent-color:var(--dsw-alias-brand-primary);margin-top:2px}',
+      '.pet-settings .pet-icon-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}',
+      '.pet-settings .pet-btn{background:transparent;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);border-radius:6px;font-size:12px;height:28px;padding:0 10px;cursor:pointer}',
+      '.pet-settings .pet-btn:hover{background:rgba(127,127,127,.08)}',
+      '.pet-settings .pet-btn.pet-primary{background:var(--dsw-alias-brand-primary);border-color:transparent;color:#fff}',
+      '.pet-settings .pet-status{font-size:12px;line-height:18px;margin-top:10px;color:var(--dsw-alias-label-tertiary);min-height:18px}',
+      '.pet-settings .pet-err{color:var(--dsw-alias-state-error-primary)}',
+      '.pet-settings .pet-badge{display:inline-block;font-size:11px;line-height:16px;padding:1px 7px;border-radius:999px;background:rgba(127,127,127,.14);color:var(--dsw-alias-label-secondary);margin-left:6px}',
+    ].join('')
+
+    function useStyleOnce() {
+      useEffect(() => {
+        if (typeof document === 'undefined') return
+        if (!document.getElementById(CSS_TAG)) {
+          const style = document.createElement('style')
+          style.id = CSS_TAG
+          style.textContent = CSS
+          document.head.appendChild(style)
+        }
+      }, [])
+    }
+
+    const TOGGLES = [
+      ['autoStart', '随 DSH 启动', 'DSH 启动时自动拉起桌宠；改动在下次启动 DSH 生效。'],
+      ['showBalance', '显示余额', '桌宠气泡/右键菜单显示 DeepSeek 账户余额。'],
+      ['showPrioritySessions', '显示高优会话', '列出等待确认 / 出错的会话，气泡显示高优数量。'],
+      ['showCost', '显示费用气泡', '每轮结束显示本轮和本会话的 token 费用估算。'],
+      ['showDockIcon', '显示 Dock 图标', '在程序坞显示桌宠图标。'],
+      ['showTrayIcon', '显示菜单栏图标', '在右上角菜单栏显示托盘图标。'],
+    ]
+
+    function IconRow({ kind, title, hint, exists, busy, onPick, onReset }) {
+      const inputRef = useRef(null)
+      return h('div', { className: 'pet-row' },
+        h('div', null,
+          h('div', { className: 'pet-label' }, title,
+            exists ? h('span', { className: 'pet-badge' }, '已自定义') : h('span', { className: 'pet-badge' }, '默认图标')),
+          h('div', { className: 'pet-hint' }, hint)),
+        h('div', { className: 'pet-icon-actions' },
+          h('input', {
+            ref: inputRef,
+            type: 'file',
+            accept: 'image/png',
+            style: { display: 'none' },
+            onChange: (event) => {
+              const file = event.target.files && event.target.files[0]
+              event.target.value = ''
+              if (file) onPick(kind, file)
+            },
+          }),
+          h('button', {
+            className: 'pet-btn',
+            disabled: busy,
+            onClick: () => inputRef.current && inputRef.current.click(),
+            type: 'button',
+          }, '上传 PNG…'),
+          exists ? h('button', {
+            className: 'pet-btn',
+            disabled: busy,
+            onClick: () => onReset(kind),
+            type: 'button',
+          }, '恢复默认') : null))
+    }
+
+    function PetSettingsSection() {
+      useStyleOnce()
+      const [settings, setSettings] = useState(null)
+      const [icons, setIcons] = useState({ app: false, tray: false })
+      const [message, setMessage] = useState('')
+      const [error, setError] = useState('')
+      const [busy, setBusy] = useState(false)
+
+      const load = useCallback(async () => {
+        setError('')
+        try {
+          const response = await fetch(`${API}/settings`, { headers: { accept: 'application/json' } })
+          const json = await response.json().catch(() => ({}))
+          if (!response.ok || !json.ok) throw new Error(json.error || `HTTP ${response.status}`)
+          setSettings(json.settings)
+          setIcons(json.icons || { app: false, tray: false })
+        } catch (err) {
+          setError(`读取桌宠设置失败：${err.message}`)
+        }
+      }, [])
+
+      useEffect(() => { load() }, [load])
+
+      const postSettings = useCallback(async (next) => {
+        const response = await fetch(`${API}/settings`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify(next),
+        })
+        const json = await response.json().catch(() => ({}))
+        if (!response.ok || !json.ok) throw new Error(json.error || `HTTP ${response.status}`)
+        setSettings(json.settings)
+      }, [])
+
+      const update = useCallback(async (key, value) => {
+        if (!settings) return
+        const next = { ...settings, [key]: value }
+        setSettings(next)
+        setBusy(true)
+        setMessage('')
+        setError('')
+        try {
+          await postSettings(next)
+          setMessage('已保存；桌宠会在 1 秒内应用。')
+        } catch (err) {
+          setError(`保存失败：${err.message}`)
+          await load()
+        } finally {
+          setBusy(false)
+        }
+      }, [settings, postSettings, load])
+
+      const pickIcon = useCallback(async (kind, file) => {
+        setBusy(true)
+        setMessage('')
+        setError('')
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result)
+            reader.onerror = () => reject(new Error('读取文件失败'))
+            reader.readAsDataURL(file)
+          })
+          const response = await fetch(`${API}/icon`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify({ kind, dataUrl }),
+          })
+          const json = await response.json().catch(() => ({}))
+          if (!response.ok || !json.ok) throw new Error(json.error || `HTTP ${response.status}`)
+          setIcons(json.icons || { app: false, tray: false })
+          setMessage(kind === 'app' ? 'Dock 图标已更新。' : '菜单栏图标已更新。')
+        } catch (err) {
+          setError(`图标上传失败：${err.message}`)
+        } finally {
+          setBusy(false)
+        }
+      }, [])
+
+      const resetIcon = useCallback(async (kind) => {
+        setBusy(true)
+        setMessage('')
+        setError('')
+        try {
+          const response = await fetch(`${API}/icon`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify({ kind, reset: true }),
+          })
+          const json = await response.json().catch(() => ({}))
+          if (!response.ok || !json.ok) throw new Error(json.error || `HTTP ${response.status}`)
+          setIcons(json.icons || { app: false, tray: false })
+          setMessage('已恢复默认图标。')
+        } catch (err) {
+          setError(`恢复失败：${err.message}`)
+        } finally {
+          setBusy(false)
+        }
+      }, [])
+
+      if (!settings) {
+        return h('div', { className: 'pet-settings' },
+          h('h3', null, '桌宠'),
+          error ? h('div', { className: 'pet-status pet-err' }, error) : h('div', { className: 'pet-status' }, '读取中…'))
+      }
+
+      return h('div', { className: 'pet-settings' },
+        h('h3', null, '桌宠'),
+        h('p', { className: 'pet-intro' },
+          '透明置顶的独立桌宠；这里控制它显示什么、是否随 DSH 启动，以及 Dock / 菜单栏图标。',
+          '设置保存在 ', h('code', null, '~/.dsh-desktop-pet/settings.json'), '。'),
+        h('div', { className: 'pet-group' }, '显示'),
+        h('div', null, TOGGLES.map(([key, label, hint]) => h('div', { className: 'pet-row', key },
+          h('div', null,
+            h('div', { className: 'pet-label' }, label),
+            h('div', { className: 'pet-hint' }, hint)),
+          h('input', {
+            type: 'checkbox',
+            checked: settings[key] === true,
+            disabled: busy,
+            onChange: (event) => update(key, event.target.checked),
+          })))),
+        h('div', { className: 'pet-group' }, '图标'),
+        h(IconRow, {
+          kind: 'app',
+          title: 'Dock 图标',
+          hint: '建议 512×512 或 1024×1024 PNG；运行时替换 Dock，Finder/启动台 bundle 图标不变。',
+          exists: icons.app,
+          busy,
+          onPick: pickIcon,
+          onReset: resetIcon,
+        }),
+        h(IconRow, {
+          kind: 'tray',
+          title: '菜单栏图标',
+          hint: '建议 22×22 / 44×44 PNG；黑色+透明更贴近菜单栏 template 风格。',
+          exists: icons.tray,
+          busy,
+          onPick: pickIcon,
+          onReset: resetIcon,
+        }),
+        h('div', { className: `pet-status${error ? ' pet-err' : ''}` }, error || message))
+    }
+
+    const inject = ['slots']
+    function apply(ctx) {
+      ctx.effect(
+        () => ctx.slots.inject('settings.section', () =>
+          ctx.slots.register(
+            { name: 'settings.section', id: 'dsh-desktop-pet', order: 7, label: () => '桌宠' },
+            PetSettingsSection,
+          ), 'dsh-desktop-pet: settings section'),
+        'dsh-desktop-pet: settings section',
+      )
+    }
+
+    exports.apply = apply
+    exports.inject = inject
+    exports.PetSettingsSection = PetSettingsSection
+    return module.exports
+  },
+})

@@ -21,6 +21,18 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT = path.resolve(HERE, '..')
 const STATE_DIR = path.join(os.homedir(), '.dsh-desktop-pet')
 const STATE_FILE = path.join(STATE_DIR, 'state.json')
+const SETTINGS_FILE = path.join(STATE_DIR, 'settings.json')
+const ICON_DIR = path.join(STATE_DIR, 'icons')
+
+const DEFAULT_PET_SETTINGS = {
+  autoStart: true,
+  showDockIcon: false,
+  showTrayIcon: false,
+  showBalance: true,
+  showPrioritySessions: true,
+  showCost: true,
+  icons: { app: null, tray: null },
+}
 
 const APP_CANDIDATES = [
   process.env.DSH_PET_APP,
@@ -327,6 +339,149 @@ function safeGet(ctx, name) {
   }
 }
 
+function jsonResponse(res, code, value) {
+  res.statusCode = code
+  res.setHeader('content-type', 'application/json; charset=utf-8')
+  res.end(JSON.stringify(value))
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    let size = 0
+    req.on('data', (chunk) => {
+      size += chunk.length
+      if (size > 8 * 1024 * 1024) {
+        reject(new Error('body too large'))
+        req.destroy()
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    req.on('error', reject)
+  })
+}
+
+function readPetSettings() {
+  try {
+    const parsed = JSON.parse(readFileSync(SETTINGS_FILE, 'utf8'))
+    return {
+      ...DEFAULT_PET_SETTINGS,
+      ...parsed,
+      icons: { ...DEFAULT_PET_SETTINGS.icons, ...(parsed.icons || {}) },
+    }
+  } catch {
+    return structuredClone(DEFAULT_PET_SETTINGS)
+  }
+}
+
+function writePetSettings(settings) {
+  mkdirSync(STATE_DIR, { recursive: true })
+  const temp = SETTINGS_FILE + '.tmp'
+  writeFileSync(temp, JSON.stringify(settings, null, 2) + '\n')
+  renameSync(temp, SETTINGS_FILE)
+}
+
+function sanitizePetSettings(input) {
+  const current = readPetSettings()
+  const next = { ...current, icons: { ...current.icons } }
+  for (const key of ['autoStart', 'showDockIcon', 'showTrayIcon', 'showBalance', 'showPrioritySessions', 'showCost']) {
+    if (typeof input?.[key] === 'boolean') next[key] = input[key]
+  }
+  if (input?.icons && typeof input.icons === 'object') {
+    for (const key of ['app', 'tray']) {
+      const value = input.icons[key]
+      if (value === null || typeof value === 'string') next.icons[key] = value
+    }
+  }
+  return next
+}
+
+function petIconExists(kind) {
+  return existsSync(path.join(ICON_DIR, `${kind}.png`))
+}
+
+function registerPetApi(ctx) {
+  const web = safeGet(ctx, 'webServer')
+  if (!web || typeof web.register !== 'function') {
+    console.warn('[dsh-pet] webServer unavailable, settings section API disabled')
+    return
+  }
+  const connection = safeGet(ctx, 'connection')
+  const allow = (req) => {
+    try {
+      if (connection && typeof connection.requestRejection === 'function') {
+        return !connection.requestRejection(req)
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  web.register({
+    kind: 'exact',
+    path: '/dsh-pet/api/settings',
+    handler: async (req, res) => {
+      if (!allow(req)) return jsonResponse(res, 403, { ok: false, error: 'forbidden' })
+      if (req.method === 'GET') {
+        return jsonResponse(res, 200, {
+          ok: true,
+          settings: readPetSettings(),
+          icons: { app: petIconExists('app'), tray: petIconExists('tray') },
+        })
+      }
+      if (req.method !== 'POST') return jsonResponse(res, 405, { ok: false })
+      try {
+        const body = JSON.parse(await readBody(req))
+        const next = sanitizePetSettings(body)
+        writePetSettings(next)
+        return jsonResponse(res, 200, { ok: true, settings: next })
+      } catch (err) {
+        return jsonResponse(res, 400, { ok: false, error: err.message })
+      }
+    },
+  })
+
+  web.register({
+    kind: 'exact',
+    path: '/dsh-pet/api/icon',
+    handler: async (req, res) => {
+      if (!allow(req)) return jsonResponse(res, 403, { ok: false, error: 'forbidden' })
+      if (req.method !== 'POST') return jsonResponse(res, 405, { ok: false })
+      try {
+        const body = JSON.parse(await readBody(req))
+        const kind = body?.kind
+        if (kind !== 'app' && kind !== 'tray') return jsonResponse(res, 400, { ok: false, error: 'kind must be app or tray' })
+        mkdirSync(ICON_DIR, { recursive: true })
+        const target = path.join(ICON_DIR, `${kind}.png`)
+        if (body.reset === true) {
+          rmSync(target, { force: true })
+          const settings = readPetSettings()
+          settings.icons[kind] = null
+          writePetSettings(settings)
+          return jsonResponse(res, 200, { ok: true, icons: { app: petIconExists('app'), tray: petIconExists('tray') } })
+        }
+        const match = typeof body.dataUrl === 'string' && body.dataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/)
+        if (!match) return jsonResponse(res, 400, { ok: false, error: 'only PNG data URLs are accepted' })
+        const bytes = Buffer.from(match[1], 'base64')
+        if (bytes.length < 8 || bytes[0] !== 0x89 || bytes.toString('ascii', 1, 4) !== 'PNG') {
+          return jsonResponse(res, 400, { ok: false, error: 'invalid PNG' })
+        }
+        if (bytes.length > 6 * 1024 * 1024) return jsonResponse(res, 413, { ok: false, error: 'icon too large (max 6MB)' })
+        writeFileSync(target, bytes)
+        const settings = readPetSettings()
+        settings.icons[kind] = `icons/${kind}.png`
+        writePetSettings(settings)
+        return jsonResponse(res, 200, { ok: true, icons: { app: petIconExists('app'), tray: petIconExists('tray') } })
+      } catch (err) {
+        return jsonResponse(res, 400, { ok: false, error: err.message })
+      }
+    },
+  })
+}
+
 export function apply(ctx) {
   let disposed = false
   let writeTimer = null
@@ -616,6 +771,11 @@ export function apply(ctx) {
 
     const stopListening = ctx.on('session/event', onSessionEvent)
     writeNow()
+    try {
+      registerPetApi(ctx)
+    } catch (err) {
+      console.warn('[dsh-pet] settings api disabled:', err && err.message)
+    }
     // 心跳：state.json 保持新鲜，桌宠据此判断 bridge 是否还活着。
     const heartbeat = setInterval(() => scheduleWrite(), 10000)
     heartbeat.unref?.()

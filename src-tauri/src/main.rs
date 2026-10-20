@@ -170,6 +170,18 @@ fn settings_path() -> PathBuf {
     settings_dir().join("settings.json")
 }
 
+fn file_modified(path: &Path) -> Option<SystemTime> {
+    fs::metadata(path).and_then(|meta| meta.modified()).ok()
+}
+
+fn settings_signature() -> (Option<SystemTime>, Option<SystemTime>, Option<SystemTime>) {
+    (
+        file_modified(&settings_path()),
+        file_modified(&settings_dir().join("icons").join("app.png")),
+        file_modified(&settings_dir().join("icons").join("tray.png")),
+    )
+}
+
 fn read_settings() -> PetSettings {
     fs::read_to_string(settings_path())
         .ok()
@@ -862,7 +874,20 @@ fn collect_state() -> PetState {
 fn spawn_state_loop(app: AppHandle) {
     std::thread::spawn(move || {
         let mut ticks = 0u64;
+        let mut last_settings_sig = settings_signature();
         loop {
+            // DSH 设置页 / 手动编辑 settings.json 或 icons/*.png 后，1s 内应用。
+            let sig = settings_signature();
+            if sig != last_settings_sig {
+                last_settings_sig = sig;
+                let handle = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    rebuild_tray(&handle);
+                    apply_icons(&handle);
+                    emit_display_settings(&handle);
+                    log_msg("settings: reloaded from external file change");
+                });
+            }
             let state = collect_state();
             if ticks < 5 || ticks % 60 == 0 {
                 log_msg(&format!(
@@ -1362,25 +1387,32 @@ fn spawn_hover_loop(window: WebviewWindow, pet_size: u32) {
 }
 
 fn apply_icons(app: &AppHandle) {
-    if let Some(bytes) = load_icon_bytes("app") {
-        let cloned = bytes.clone();
-        let _ = app.run_on_main_thread(move || {
-            let ok = set_dock_icon(&cloned);
-            log_msg(&format!("icon: app custom applied={ok}"));
-        });
-    } else {
-        log_msg("icon: app default (built-in)");
-    }
+    let custom_app = load_icon_bytes("app");
+    let app_bytes = custom_app
+        .clone()
+        .unwrap_or_else(|| include_bytes!("../icons/128x128@2x.png").to_vec());
+    let _ = app.run_on_main_thread(move || {
+        let ok = set_dock_icon(&app_bytes);
+        log_msg(&format!(
+            "icon: app {} applied={ok}",
+            if custom_app.is_some() { "custom" } else { "default" }
+        ));
+    });
 
-    if let Some(bytes) = load_icon_bytes("tray") {
-        if let Some(tray) = app.tray_by_id("pet-tray") {
-            match tauri::image::Image::from_bytes(&bytes) {
-                Ok(image) => {
-                    let _ = tray.set_icon(Some(image));
-                    log_msg("icon: tray custom applied");
-                }
-                Err(err) => log_msg(&format!("icon: tray custom failed: {err}")),
+    let custom_tray = load_icon_bytes("tray");
+    let tray_bytes = custom_tray
+        .clone()
+        .unwrap_or_else(|| include_bytes!("../icons/32x32.png").to_vec());
+    if let Some(tray) = app.tray_by_id("pet-tray") {
+        match tauri::image::Image::from_bytes(&tray_bytes) {
+            Ok(image) => {
+                let _ = tray.set_icon(Some(image));
+                log_msg(&format!(
+                    "icon: tray {} applied",
+                    if custom_tray.is_some() { "custom" } else { "default" }
+                ));
             }
+            Err(err) => log_msg(&format!("icon: tray apply failed: {err}")),
         }
     }
 }
