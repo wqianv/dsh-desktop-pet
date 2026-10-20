@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop-pet",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "private": true,
   "description": "A true OS-level desktop pet for DeepSeek Harness: transparent, always-on-top overlay + moddable pet packs.",
   "scripts": {
@@ -9,7 +9,10 @@
     "build:release": "tauri build --bundles app",
     "open": "bash ./launch.sh",
     "state": "node tools/state-dump.js --watch",
-    "preview": "python3 tools/make-pet-preview.py --pack pets/dafeiyu --out docs/pet.png"
+    "preview": "python3 tools/make-pet-preview.py --pack pets/dafeiyu --out docs/pet.png",
+    "test": "bash scripts/smoke-test.sh",
+    "test:app": "bash scripts/smoke-test.sh --app",
+    "doctor": "bash scripts/doctor.sh"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.3"

@@ -74,11 +74,16 @@ fn dsh_home() -> PathBuf {
 }
 
 fn config_path() -> PathBuf {
+    if let Ok(path) = std::env::var("DSH_PET_CONFIG") {
+        return PathBuf::from(path);
+    }
     project_root().join(".userdata").join("config.json")
 }
 
 fn log_msg(message: &str) {
-    let path = project_root().join("pet.log");
+    let path = std::env::var("DSH_PET_LOG")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| project_root().join("pet.log"));
     if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
         use std::io::Write as _;
         let _ = writeln!(file, "[{}] {}", now_ms(), message);

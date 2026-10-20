@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Python deps
+        run: python3 -m pip install --quiet pillow
+      - name: Validate pet packs
+        run: python3 tools/validate-pet-pack.py --all
+      - name: Check JS syntax
+        run: |
+          for f in renderer/*.js dsh-launcher/*.js tools/state-dump.js; do node --check "$f"; done
+      - name: Rust check
+        run: cargo check --manifest-path src-tauri/Cargo.toml

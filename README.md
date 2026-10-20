@@ -73,6 +73,15 @@ npm run open
 
 > 从 DSH agent 的沙箱里直接跑二进制会被 WebKit 的 sandbox 限制，所以用 `.app + open` 的方式；正常终端里也可以直接 `cargo run` 调试。
 
+## 测试 / 给别人用
+
+- 自动化：`bash scripts/smoke-test.sh`（`--app` 会临时 HOME 启动一次桌宠）
+- CI：`.github/workflows/ci.yml`（packs + JS + cargo check）
+- 完整干净环境/beta 清单：[`docs/TESTING.md`](docs/TESTING.md)
+- 排障信息采集：`bash scripts/doctor.sh`
+
+当前仍是**开发者版**：别人需要自己安装 Rust/Xcode/Node 并构建；release 签名/公证还没做。
+
 ## 它怎么工作
 
 ```
