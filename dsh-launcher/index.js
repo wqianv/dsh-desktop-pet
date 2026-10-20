@@ -90,7 +90,9 @@ export function apply(ctx) {
       }
 
       return () => {
-        if (spawned) stopPet()
+        // DSH 退出/重载插件时统一关掉桌宠（包括安装插件前就在跑的那只），
+        // 保证下一次 DSH 启动后由 managed 实例接管生命周期。
+        stopPet()
       }
     })
   } catch (err) {

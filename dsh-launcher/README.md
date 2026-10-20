@@ -11,9 +11,9 @@
 ## 行为
 
 - DSH 启动加载插件 → 直接 spawn `DSH Pet.app/Contents/MacOS/dsh-desktop-pet`，并注入 `DSH_PET_MANAGED=1`
-- DSH 退出/卸载插件 → `pkill -f "DSH Pet.app/Contents/MacOS/dsh-desktop-pet"`
+- DSH 退出/卸载插件 → `pkill -f "DSH Pet.app/Contents/MacOS/dsh-desktop-pet"`（安装前手动跑的实例也会被接管关闭）
 - DSH 被强杀、dispose 没跑 → 桌宠带 `DSH_PET_MANAGED=1` 启动，会轮询 DSH 进程，不在就自己退出
-- 桌宠已在运行时不重复拉起；`DSH_PET_APP` 可覆盖 .app 路径
+- 桌宠已在运行时不重复拉起（第一次安装后建议托盘退出一次再重启 DSH）；`DSH_PET_APP` 可覆盖 .app 路径
 
 ## 手动测试插件逻辑
 
