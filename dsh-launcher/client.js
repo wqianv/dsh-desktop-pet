@@ -16,7 +16,7 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
 } else {
   window.__DSH_DESKTOP_PET_CLIENT_BOOTED__ = true
   window.__ModuleLoader__.load({
-  id: 'dsh-desktop-pet',
+  id: 'dsh-desktop-pet-launcher',
   factory: (require) => {
     const module = { exports: {} }
     const exports = module.exports
