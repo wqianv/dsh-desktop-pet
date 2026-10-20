@@ -66,13 +66,14 @@ function stopPet() {
 }
 
 function readAutoStart() {
+  if (process.env.DSH_PET_AUTOSTART === '0') return false
   if (process.env.DSH_PET_AUTOSTART === '1') return true
   try {
     const text = readFileSync(path.join(os.homedir(), '.dsh-desktop-pet', 'settings.json'), 'utf8')
-    return JSON.parse(text).autoStart === true
+    // 默认开启；只有显式 autoStart:false 才关闭。
+    return JSON.parse(text).autoStart !== false
   } catch {
-    // 默认关闭：必须由用户在桌宠托盘里打开「随 DSH 启动」
-    return false
+    return true
   }
 }
 
@@ -559,7 +560,7 @@ export function apply(ctx) {
     if (autoStart) {
       launchPet()
     } else {
-      console.log('[dsh-pet] autoStart=false, bridge only（在托盘里打开「随 DSH 启动」后下次 DSH 生效）')
+      console.log('[dsh-pet] autoStart=false, bridge only（右键桌宠或托盘里打开「随 DSH 启动」后下次 DSH 生效）')
     }
 
     const stopListening = ctx.on('session/event', onSessionEvent)

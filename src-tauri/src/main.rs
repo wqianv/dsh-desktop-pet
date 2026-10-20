@@ -115,11 +115,25 @@ struct IconSettings {
     tray: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct PetSettings {
     auto_start: bool,
+    show_dock_icon: bool,
+    show_tray_icon: bool,
     icons: IconSettings,
+}
+
+impl Default for PetSettings {
+    fn default() -> Self {
+        Self {
+            // 随 DSH 启动默认开启；图标默认不显示（右键桌宠可以打开）。
+            auto_start: true,
+            show_dock_icon: false,
+            show_tray_icon: false,
+            icons: IconSettings::default(),
+        }
+    }
 }
 
 fn settings_dir() -> PathBuf {
@@ -149,6 +163,20 @@ fn write_settings(settings: &PetSettings) {
 
 /// 自定义图标的查找顺序：settings 里显式路径 → ~/.dsh-desktop-pet/icons/<kind>.png
 /// → 当前宠物包目录的 <kind>.png。找不到就沿用内置图标（我们自己画的那套）。
+fn apply_visibility(app: &AppHandle, settings: &PetSettings) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app.set_dock_visibility(settings.show_dock_icon);
+    }
+    if let Some(tray) = app.tray_by_id("pet-tray") {
+        let _ = tray.set_visible(settings.show_tray_icon);
+    }
+    log_msg(&format!(
+        "settings: showDock={} showTray={}",
+        settings.show_dock_icon, settings.show_tray_icon
+    ));
+}
+
 fn configured_icon_path(kind: &str) -> Option<PathBuf> {
     let settings = read_settings();
     let configured = if kind == "app" {
@@ -237,7 +265,7 @@ fn set_dock_icon(bytes: &[u8]) -> bool {
             bytes.len(),
         )
     };
-    let Some(image) = (unsafe { NSImage::initWithData(NSImage::alloc(), &data) }) else {
+    let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) else {
         return false;
     };
     unsafe {
@@ -867,6 +895,36 @@ fn reload_packs() -> Vec<PackView> {
 }
 
 #[tauri::command]
+fn show_context_menu(window: WebviewWindow) -> Result<(), String> {
+    let settings = read_settings();
+    let visible = settings.show_dock_icon || settings.show_tray_icon;
+    let show_icons = CheckMenuItem::with_id(
+        &window,
+        "ctx-icons",
+        "显示图标（Dock + 菜单栏）",
+        true,
+        visible,
+        None::<&str>,
+    )
+    .map_err(|e| e.to_string())?;
+    let auto_start = CheckMenuItem::with_id(
+        &window,
+        "ctx-autostart",
+        "随 DSH 启动",
+        true,
+        settings.auto_start,
+        None::<&str>,
+    )
+    .map_err(|e| e.to_string())?;
+    let quit = MenuItem::with_id(&window, "ctx-quit", "退出", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let menu = Menu::with_items(&window, &[&show_icons, &auto_start, &quit])
+        .map_err(|e| e.to_string())?;
+    log_msg("context menu shown");
+    window.popup_menu(&menu).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn set_ignore(window: WebviewWindow, ignore: bool) -> Result<(), String> {
     window
         .set_ignore_cursor_events(ignore)
@@ -1028,7 +1086,25 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         settings.auto_start,
         None::<&str>,
     )?;
+    let show_dock = CheckMenuItem::with_id(
+        app,
+        "show-dock",
+        "显示 Dock 图标",
+        true,
+        settings.show_dock_icon,
+        None::<&str>,
+    )?;
+    let show_tray = CheckMenuItem::with_id(
+        app,
+        "show-tray",
+        "显示菜单栏图标",
+        true,
+        settings.show_tray_icon,
+        None::<&str>,
+    )?;
     let auto_start_item = auto_start.clone();
+    let show_dock_item = show_dock.clone();
+    let show_tray_item = show_tray.clone();
     let reload_icons = MenuItem::with_id(app, "reload-icons", "重载自定义图标", true, None::<&str>)?;
     let open_icons = MenuItem::with_id(app, "open-icons", "打开图标目录…", true, None::<&str>)?;
     let recenter = MenuItem::with_id(app, "recenter", "移到当前屏幕", true, None::<&str>)?;
@@ -1036,6 +1112,8 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(
         app,
         &[
+            &show_dock,
+            &show_tray,
             &auto_start,
             &reload_icons,
             &open_icons,
@@ -1066,6 +1144,20 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                     settings.auto_start
                 ));
             }
+            "show-dock" => {
+                let mut settings = read_settings();
+                settings.show_dock_icon = !settings.show_dock_icon;
+                write_settings(&settings);
+                let _ = show_dock_item.set_checked(settings.show_dock_icon);
+                apply_visibility(app, &settings);
+            }
+            "show-tray" => {
+                let mut settings = read_settings();
+                settings.show_tray_icon = !settings.show_tray_icon;
+                write_settings(&settings);
+                let _ = show_tray_item.set_checked(settings.show_tray_icon);
+                apply_visibility(app, &settings);
+            }
             "reload-icons" => apply_icons(app),
             "open-icons" => {
                 let dir = settings_dir().join("icons");
@@ -1094,6 +1186,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+fn rebuild_tray(app: &AppHandle) {
+    let _ = app.remove_tray_by_id("pet-tray");
+    let _ = build_tray(app);
+    let settings = read_settings();
+    apply_visibility(app, &settings);
+}
+
 /* ------------------------------------------------------------------ */
 /* 启动                                                               */
 /* ------------------------------------------------------------------ */
@@ -1108,6 +1207,28 @@ fn main() {
     }
 
     tauri::Builder::default()
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "ctx-icons" => {
+                let mut settings = read_settings();
+                let visible = settings.show_dock_icon || settings.show_tray_icon;
+                settings.show_dock_icon = !visible;
+                settings.show_tray_icon = !visible;
+                write_settings(&settings);
+                rebuild_tray(app);
+            }
+            "ctx-autostart" => {
+                let mut settings = read_settings();
+                settings.auto_start = !settings.auto_start;
+                write_settings(&settings);
+                rebuild_tray(app);
+                log_msg(&format!(
+                    "settings: autoStart={} (takes effect next DSH start)",
+                    settings.auto_start
+                ));
+            }
+            "ctx-quit" => app.exit(0),
+            _ => {}
+        })
         .invoke_handler(tauri::generate_handler![
             bootstrap,
             reload_packs,
@@ -1115,6 +1236,7 @@ fn main() {
             frontend_ready,
             frontend_log,
             set_ignore,
+            show_context_menu,
             start_drag,
             hide_pet,
             quit_app,
@@ -1144,6 +1266,9 @@ fn main() {
             spawn_hover_loop(window.clone(), config.size);
             build_tray(app.handle())?;
             apply_icons(app.handle());
+            let initial_settings = read_settings();
+            apply_visibility(app.handle(), &initial_settings);
+
             spawn_state_loop(app.handle().clone());
             write_config(&config);
 

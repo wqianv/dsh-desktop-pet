@@ -15,7 +15,7 @@
 - **行为 mod**：`pets/<id>/behavior.json` 定义动画表、阶段映射、点击/拖拽互动、挂机小动作、气泡和费用模板；非程序员也能改。
 - **17 段动画**：待机/跑动/挥手/跳跃/出错/等待/干活/思考 + 拖拽/摸头/害羞/打瞌睡/吃白饭/伸懒腰/跳舞/发呆。
 - **费用估算**：每轮 `turn/end` 后按 DeepSeek 峰谷价目算本轮和整段会话的 token 费用，气泡显示 `本轮 ¥x · 本会话 ¥y`。
-- **随 DSH 启动（默认关）**：`dsh-launcher/` host 插件负责拉起/关闭桌宠；开关在托盘菜单「随 DSH 启动」，默认不自动拉起，只做状态/费用桥。
+- **随 DSH 启动（默认开）**：`dsh-launcher/` host 插件负责拉起/关闭桌宠；托盘/右键菜单可关。
 
 ## 快速开始
 
@@ -154,25 +154,26 @@ Tauri WebviewWindow（透明/无边框/置顶/skipTaskbar）
 9 drag | 10 pet | 11 shy | 12 sleep | 13 eat | 14 stretch | 15 dance | 16 daydream
 ```
 
-## 随 DSH 启动（默认关）
+## 随 DSH 启动（默认开启）
 
-`dsh-launcher/` 是 DSH host 插件：**默认只做状态/费用桥，不自动拉起桌宠**。要随 DSH 启动：
+`dsh-launcher/` 是 DSH host 插件：**默认随 DSH 启动桌宠**（`autoStart` 默认 `true`）。开关方式：
 
-1. 先手动打开一次桌宠（`npm run open`）
-2. 菜单栏托盘图标 → 勾选 **随 DSH 启动（下次启动生效）**
-3. 下次完全退出/重开 DSH，插件会拉起桌宠；DSH 退出时关掉，DSH 被强杀时桌宠自己退出
+- 显示图标后，托盘菜单里勾选/取消 **随 DSH 启动（下次启动生效）**
+- 图标都隐藏时，**右键桌宠** → 勾选/取消 **随 DSH 启动**
 
-开关写在 `~/.dsh-desktop-pet/settings.json`：
+设置写在 `~/.dsh-desktop-pet/settings.json`：
 
 ```json
 { "autoStart": true }
 ```
 
-默认 `false`。关闭时插件仍会写状态桥，手动打开的桌宠照常收到状态和费用。DSH 插件页安装步骤见 [`dsh-launcher/README.md`](dsh-launcher/README.md)。
+DSH 启动时插件会自动拉起桌宠；DSH 退出时关掉，DSH 被强杀时桌宠自己退出。DSH 插件页安装步骤见 [`dsh-launcher/README.md`](dsh-launcher/README.md)。
 
 ## 自定义图标
 
-默认使用项目内我们自己画的图标（`src-tauri/icons/`），不配置就保持默认。想换的话，把 PNG 放到：
+**默认不显示 Dock 图标和菜单栏图标**（`showDockIcon=false`、`showTrayIcon=false`），只留桌面上的桌宠窗口；**右键桌宠**可以打开「显示图标」和「随 DSH 启动」菜单。
+
+显示图标后，图标使用项目内我们自己画的那套（`src-tauri/icons/`）；想换自定义图标，把 PNG 放到：
 
 ```
 ~/.dsh-desktop-pet/icons/app.png     # Dock 图标，建议 512×512 / 1024×1024
@@ -185,12 +186,22 @@ Tauri WebviewWindow（透明/无边框/置顶/skipTaskbar）
 
 ```json
 {
-  "autoStart": false,
+  "autoStart": true,
+  "showDockIcon": true,
+  "showTrayIcon": true,
   "icons": { "app": "icons/my-icon.png", "tray": "icons/my-tray.png" }
 }
 ```
 
-说明：Dock 图标是运行时替换；Finder/启动台里的 `.app`  bundle 图标仍是打包时那张，要改 bundle 图标需要重新 `tauri icon` + 打包。托盘菜单还有 **打开图标目录…** 直接打开 `~/.dsh-desktop-pet/icons/`。
+显示/隐藏图标在托盘菜单里分别有 **显示 Dock 图标**、**显示菜单栏图标** 两个开关；两个都隐藏后，用右键桌宠菜单恢复。如果右键菜单因为权限/坐标问题打不开，直接编辑 `~/.dsh-desktop-pet/settings.json`：
+
+```json
+{ "showDockIcon": true, "showTrayIcon": true }
+```
+
+然后重启桌宠，就能重新看到图标。
+
+说明：Dock 图标是运行时替换；Finder/启动台里的 `.app` bundle 图标仍是打包时那张，要改 bundle 图标需要重新 `tauri icon` + 打包。托盘菜单还有 **打开图标目录…** 直接打开 `~/.dsh-desktop-pet/icons/`。
 
 ## 美术与许可
 

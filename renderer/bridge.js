@@ -54,7 +54,9 @@
 
     dragEnd() {},
 
-    showContextMenu() {},
+    showContextMenu() {
+      invoke('show_context_menu').catch(() => {})
+    },
 
     reloadPacks() {
       return invoke('reload_packs')

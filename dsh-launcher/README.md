@@ -10,10 +10,10 @@ DSH host 插件：**随 DSH 启动桌宠** + **把 DSH 会话状态/费用写到
 
 > 更新插件代码后同样需要重启 DSH；本地目录是 link 安装，不需要重新 add。
 
-## 启动/退出（默认关）
+## 启动/退出（默认开启）
 
-- 默认 `autoStart=false`：只写状态桥，**不拉起桌宠**
-- 用户在桌宠托盘勾选「随 DSH 启动」→ `~/.dsh-desktop-pet/settings.json` 写 `autoStart: true` → **下次 DSH 启动**生效
+- 默认 `autoStart=true`：DSH 启动时直接拉起桌宠
+- 用户关闭后（右键桌宠或托盘开关）→ `~/.dsh-desktop-pet/settings.json` 写 `autoStart:false` → **下次 DSH 启动**生效
 - autoStart=true 时：DSH 启动加载插件 → spawn `DSH Pet.app/Contents/MacOS/dsh-desktop-pet`，注入 `DSH_PET_MANAGED=1`
 - autoStart=true 且 DSH 退出/卸载插件 → 关掉由插件拉起的桌宠
 - DSH 被强杀、dispose 没跑 → 桌宠的 `DSH_PET_MANAGED=1` 会轮询 DSH Helper 进程，不在就自己退出
@@ -22,10 +22,10 @@ DSH host 插件：**随 DSH 启动桌宠** + **把 DSH 会话状态/费用写到
 ## 设置文件
 
 ```json
-{ "autoStart": false, "icons": { "app": null, "tray": null } }
+{ "autoStart": true, "showDockIcon": false, "showTrayIcon": false, "icons": { "app": null, "tray": null } }
 ```
 
-路径：`~/.dsh-desktop-pet/settings.json`。默认不存在 = `autoStart:false`，只做桥。
+路径：`~/.dsh-desktop-pet/settings.json`。默认不存在 = `autoStart:true`；`showDockIcon/showTrayIcon` 默认 false（不显示图标，右键桌宠可打开）。如果右键菜单打不开，手动把这两个字段改成 true 再重启桌宠。
 
 ## 状态桥
 
