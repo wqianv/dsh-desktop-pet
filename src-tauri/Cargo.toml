@@ -1,0 +1,18 @@
+[package]
+name = "dsh-desktop-pet"
+version = "0.1.0"
+description = "A true OS-level desktop pet for DeepSeek Harness"
+authors = ["dsh-desktop-pet contributors"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zstd = "0.13"
+base64 = "0.22"

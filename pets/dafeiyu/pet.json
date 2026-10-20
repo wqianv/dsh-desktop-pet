@@ -1,0 +1,175 @@
+{
+  "petManifestVersion": 2,
+  "id": "dafeiyu",
+  "displayName": "吃白饭的蓝色大肥鱼",
+  "description": "来自 PC2005-cloud/dsh-pet 的蓝发小鲸娘桌宠（MIT；素材允许开源使用、禁止商用）。8×9 图集适配，跟随 DSH 会话状态换动作。",
+  "version": "1.0.0",
+  "author": "PC2005-cloud",
+  "license": "Code MIT (c) 2026 PC2005-cloud; assets open-source use allowed, non-commercial. See NOTICE.md",
+  "renderer": "sprite2d",
+  "sprite2d": {
+    "spritesheetPath": "spritesheet.webp",
+    "cell": {
+      "width": 192,
+      "height": 208
+    },
+    "columns": 8,
+    "atlasRows": 9,
+    "frames": [
+      8,
+      8,
+      8,
+      4,
+      5,
+      8,
+      6,
+      6,
+      6
+    ],
+    "tracks": {
+      "idle": {
+        "durations": [
+          375,
+          375,
+          375,
+          375,
+          375,
+          375,
+          375,
+          375
+        ]
+      },
+      "running-right": {
+        "durations": [
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250
+        ]
+      },
+      "running-left": {
+        "durations": [
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250
+        ]
+      },
+      "waving": {
+        "durations": [
+          400,
+          400,
+          400,
+          400
+        ]
+      },
+      "jumping": {
+        "durations": [
+          300,
+          300,
+          300,
+          300,
+          300
+        ]
+      },
+      "failed": {
+        "durations": [
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250
+        ]
+      },
+      "waiting": {
+        "durations": [
+          417,
+          417,
+          417,
+          417,
+          417,
+          417
+        ]
+      },
+      "running": {
+        "durations": [
+          333,
+          333,
+          333,
+          333,
+          333,
+          333
+        ]
+      },
+      "review": {
+        "durations": [
+          333,
+          333,
+          333,
+          333,
+          333,
+          333
+        ]
+      }
+    }
+  },
+  "sequences": {
+    "idle": [
+      "idle",
+      "idle",
+      "idle"
+    ],
+    "thinking": [
+      "running"
+    ],
+    "tool": [
+      "running-right",
+      "running",
+      "running-left",
+      "running"
+    ],
+    "waiting": [
+      "waiting"
+    ],
+    "review": [
+      "review",
+      "running"
+    ],
+    "done": [
+      "jumping",
+      "waving",
+      "idle"
+    ],
+    "failed": [
+      "failed",
+      "waiting",
+      "idle"
+    ]
+  },
+  "remarks": {
+    "click": [
+      "哦鲸鲸…",
+      "在呢在呢",
+      "别戳啦～"
+    ],
+    "done": [
+      "搞定！",
+      "干得漂亮"
+    ],
+    "failed": [
+      "出问题了…",
+      "要不要看看日志？"
+    ]
+  }
+}
