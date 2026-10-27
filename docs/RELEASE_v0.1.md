@@ -4,7 +4,9 @@
 
 ## 下载
 
-- `DSH-Desktop-Pet-v0.1.0-macos-arm64.zip`（附 SHA256）
+- **推荐** `DSH-Desktop-Pet-v0.1.0-macos-arm64.pkg`（双击安装，自动装 app + 形象 + DSH 插件）
+- 备用 `DSH-Desktop-Pet-v0.1.0-macos-arm64.zip`（含 app、pets、插件、安装器）
+- 两者都附 SHA256
 - 仅 **Apple Silicon / macOS**；未签名/未公证的开发者 beta。
 
 ## 包含
@@ -21,9 +23,9 @@
 
 看 `INSTALL.md`；简版：
 
-1. 解压到固定目录（别只挪 `.app`）
-2. 双击 `Install DSH Pet.command`，按提示点两次「继续」；或手动在 DSH → 插件 → 本地目录 → 选 `dsh-launcher/` → 启用
-3. 完全退出 DSH 再打开
+1. **推荐**：双击 `.pkg` → 输入密码 → 点「安装」；安装器会自动放好 app/形象/插件并重启 DSH
+2. 备用：解压 zip，双击 `Install DSH Pet.command`，按提示点两次「继续」
+3. 手动：DSH → 插件 → 本地目录 → 选 `dsh-launcher/` → 启用，完全退出 DSH 再打开
 4. 首次启动如果被 Gatekeeper 拦，右键 `DSH Pet.app` → 打开
 
 ## 已知限制

@@ -13,7 +13,8 @@
     "test": "bash scripts/smoke-test.sh",
     "test:app": "bash scripts/smoke-test.sh --app",
     "doctor": "bash scripts/doctor.sh",
-    "package": "bash scripts/package-release.sh --build"
+    "package": "bash scripts/package-release.sh --build",
+    "package:pkg": "bash scripts/build-installer-pkg.sh"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.3"

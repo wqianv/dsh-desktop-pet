@@ -1,0 +1,103 @@
+#!/bin/bash
+# 由 macOS Installer 以 root 执行。
+set -u
+
+LOG="/var/log/dsh-desktop-pet-install.log"
+exec >>"$LOG" 2>&1
+echo ""
+echo "===== $(date '+%Y-%m-%d %H:%M:%S') postinstall ====="
+
+APP="/Applications/DSH Pet.app"
+SUPPORT="/Library/Application Support/DSH Desktop Pet"
+DSH_APP="/Applications/DeepSeek Harness.app"
+DSH_CLI="$DSH_APP/Contents/Resources/runtime/cli/bin/dsh"
+CONSOLE_USER="$(/usr/bin/stat -f%Su /dev/console 2>/dev/null || true)"
+
+echo "app=$APP"
+echo "support=$SUPPORT"
+echo "console_user=$CONSOLE_USER"
+
+if [[ -d "$APP" ]]; then
+  # 用户已经通过安装器确认安装；清掉隔离属性，避免插件 spawn 时被 Gatekeeper 拦。
+  /usr/bin/xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+fi
+
+if [[ -z "$CONSOLE_USER" || "$CONSOLE_USER" == "root" ]]; then
+  echo "没有图形登录用户；跳过 DSH profile 安装。"
+  exit 0
+fi
+if ! /usr/bin/id -u "$CONSOLE_USER" >/dev/null 2>&1; then
+  echo "无法识别用户 $CONSOLE_USER；跳过 DSH profile 安装。"
+  exit 0
+fi
+UID_NUM="$(/usr/bin/id -u "$CONSOLE_USER")"
+USER_HOME="$(/usr/bin/dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | /usr/bin/awk '{print $2}')"
+if [[ -z "$USER_HOME" || ! -d "$USER_HOME" ]]; then
+  echo "找不到用户 home：$CONSOLE_USER"
+  exit 0
+fi
+echo "user_home=$USER_HOME"
+echo "uid=$UID_NUM"
+
+# 1) 内置形象复制到用户目录（不覆盖用户已有同名 pack）。
+mkdir -p "$USER_HOME/.dsh-desktop-pet/pets"
+if [[ -d "$SUPPORT/pets" ]]; then
+  /usr/bin/rsync -a --ignore-existing "$SUPPORT/pets/" "$USER_HOME/.dsh-desktop-pet/pets/" || true
+  /usr/sbin/chown -R "$CONSOLE_USER:staff" "$USER_HOME/.dsh-desktop-pet" 2>/dev/null || true
+  echo "packs copied to user data"
+fi
+
+# 2) 找 DSH CLI。
+if [[ ! -x "$DSH_CLI" ]]; then
+  FOUND_APP="$(/usr/bin/mdfind "kMDItemCFBundleIdentifier == 'com.deepseek.dsh'" 2>/dev/null | /usr/bin/head -1 || true)"
+  if [[ -n "$FOUND_APP" && -x "$FOUND_APP/Contents/Resources/runtime/cli/bin/dsh" ]]; then
+    DSH_APP="$FOUND_APP"
+    DSH_CLI="$DSH_APP/Contents/Resources/runtime/cli/bin/dsh"
+  fi
+fi
+if [[ ! -x "$DSH_CLI" ]]; then
+  echo "未找到 DSH CLI（$DSH_APP）；app 已安装，但插件需要手动在 DSH 插件页添加 $SUPPORT/dsh-launcher。"
+  exit 0
+fi
+PROFILE="desktop"
+if [[ ! -d "$USER_HOME/.dsh/profiles/$PROFILE" ]]; then
+  echo "DSH profile 不存在，尝试打开一次 DSH 初始化..."
+  /usr/bin/launchctl asuser "$UID_NUM" /usr/bin/open -b com.deepseek.dsh >/dev/null 2>&1 || true
+  for _ in $(seq 1 30); do
+    [[ -d "$USER_HOME/.dsh/profiles/$PROFILE" ]] && break
+    sleep 1
+  done
+fi
+if [[ ! -d "$USER_HOME/.dsh/profiles/$PROFILE" ]]; then
+  echo "找不到 DSH profile：$USER_HOME/.dsh/profiles/$PROFILE"
+  echo "请打开一次 DSH 完成初始化，再重新运行安装包。"
+  exit 0
+fi
+
+# 3) 退出 DSH（安装插件时不能让它拿着旧 profile）。
+echo "quitting DSH..."
+/usr/bin/launchctl asuser "$UID_NUM" /usr/bin/osascript -e 'tell application "DeepSeek Harness" to quit' >/dev/null 2>&1 || true
+for _ in $(seq 1 20); do
+  /usr/bin/pgrep -f "$DSH_APP/Contents/MacOS/DeepSeek Harness" >/dev/null 2>&1 || break
+  sleep 0.5
+done
+if /usr/bin/pgrep -f "$DSH_APP/Contents/MacOS/DeepSeek Harness" >/dev/null 2>&1; then
+  echo "DSH 仍在运行；尝试继续安装插件（安装后建议手动重启 DSH）。"
+fi
+
+# 4) 安装/启用插件。dsh plugin 会把依赖写进 profile，并自动加入 bundles。
+echo "installing plugin into profile $PROFILE..."
+if /usr/bin/sudo -u "$CONSOLE_USER" -H /usr/bin/env \
+  HOME="$USER_HOME" DSH_HOME="$USER_HOME/.dsh" \
+  "$DSH_CLI" plugin --profile "$PROFILE" add "link:$SUPPORT/dsh-launcher"; then
+  echo "plugin installed"
+else
+  echo "插件安装失败。请打开 DSH → 插件 → 本地目录 → 选择 $SUPPORT/dsh-launcher 手动添加。"
+  exit 1
+fi
+
+# 5) 重新打开 DSH；插件会自动拉起桌宠。
+echo "reopening DSH..."
+/usr/bin/launchctl asuser "$UID_NUM" /usr/bin/open -b com.deepseek.dsh >/dev/null 2>&1 || true
+echo "postinstall done"
+exit 0

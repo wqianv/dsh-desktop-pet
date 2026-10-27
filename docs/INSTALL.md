@@ -2,13 +2,37 @@
 
 > 适用版本：**v0.1 beta**（Apple Silicon / arm64）
 >
-> 这是一个「装在 macOS 桌面上的桌宠」，不是 DSH 窗口里的挂件。安装分两步：**先放好桌宠 App，再给 DSH 装插件**。插件只装一次，以后打开 DSH 桌宠会自动出现。
+> 这是一个「装在 macOS 桌面上的桌宠」，不是 DSH 窗口里的挂件。  
+> **推荐下载 `.pkg` 安装包**：双击 → 安装，安装器会自动放好 app、形象、DSH 插件并重启 DSH。  
+> 如果下载的是 zip，则按下面的「备用方案」手动安装。
 
 ---
 
-## 最快：双击一次安装器
+## 最推荐：双击 `.pkg` 安装包
 
-解压后，在文件夹里找到：
+下载：
+
+```
+DSH-Desktop-Pet-v0.1.0-macos-arm64.pkg
+```
+
+1. **双击** pkg。
+2. 如果 macOS 提示「无法验证开发者」：右键 pkg → **打开**（只需要第一次）。
+3. 输入 Mac 登录密码，点 **安装**。
+4. 安装器会自动：
+   - 把桌宠装到 `/Applications/DSH Pet.app`
+   - 把自带形象和插件装到 `/Library/Application Support/DSH Desktop Pet/`
+   - 把插件装进当前用户的 DSH `desktop` profile 并启用
+   - 重启 DSH，桌宠自动出现
+
+装完打开 **DSH 设置 → 桌宠** 验收即可。  
+如果安装器提示找不到 DSH，先打开一次 DSH 完成初始化，再重新运行 pkg。
+
+---
+
+## 备用：zip + 双击一次安装器
+
+如果你下载的是 zip（或者 pkg 被系统策略拦住），解压后找到：
 
 ```
 Install DSH Pet.command
@@ -32,8 +56,8 @@ Install DSH Pet.command
 
 - [ ] 你是 **Apple Silicon（M1/M2/M3/M4）Mac**
 - [ ] 已经安装并登录 **DeepSeek Harness（DSH）**
-- [ ] 下载了 `DSH-Desktop-Pet-v0.1.0-macos-arm64.zip`
-- [ ] 知道解压后的文件夹放在哪（建议 `~/Applications`）
+- [ ] 下载了 `DSH-Desktop-Pet-v0.1.0-macos-arm64.pkg`，或 `.zip`
+- [ ] 如果用 zip：知道解压后的文件夹放在哪（建议 `~/Applications`）
 
 > 不需要安装 Rust / Xcode / Node——这是给普通用户的安装包。  
 > 如果你拿到的是源码仓库，请先看 README 的「从源码构建」。
@@ -208,6 +232,16 @@ bash scripts/doctor.sh
 - 未登录/离线时其余动画和互动不受影响
 
 ### 6. 想卸载
+
+**用 pkg 安装的：**
+
+1. DSH → 插件 → 停用/移除 `dsh-desktop-pet-launcher`
+2. 完全退出 DSH
+3. 右键桌宠 → 退出
+4. 删除 `/Applications/DSH Pet.app` 和 `/Library/Application Support/DSH Desktop Pet/`
+5. 可选清理用户数据：
+
+**用 zip 安装的：**
 
 1. DSH → 插件 → 停用/移除 `dsh-desktop-pet-launcher`
 2. 完全退出 DSH

@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+# 安装前做一次基本检查；真正的 DSH profile 操作在 postinstall 里。
+if [[ "$(/usr/bin/uname -m)" != "arm64" ]]; then
+  echo "DSH 桌宠 v0.1 只支持 Apple Silicon。" >&2
+  exit 1
+fi
+exit 0
