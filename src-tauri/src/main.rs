@@ -1834,9 +1834,11 @@ fn main() {
                 startup_settings.pack_id = Some(config.pack_id.clone());
                 write_settings(&startup_settings);
             }
-            let width = (config.size as f64 * 192.0 / 208.0) as u32 + 96;
-            let height = config.size + 120;
-            let _ = window.set_size(tauri::PhysicalSize::new(width, height));
+            // config.size 是 CSS 逻辑像素：必须用 LogicalSize，不能把物理像素当逻辑像素。
+            // Retina 屏上 PhysicalSize(280,320) 的 CSS viewport 只有 140×160，会把 200px 的宠物裁掉头/两侧。
+            let width = (config.size as f64 * 192.0 / 208.0) + 96.0;
+            let height = config.size as f64 + 120.0;
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
             position_window(&window);
 
             window.set_ignore_cursor_events(true)?;
