@@ -10,6 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -20,6 +21,7 @@ use serde_json::{json, Value};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 
 #[cfg(target_os = "macos")]
 use objc2::{AnyThread, MainThreadMarker};
@@ -32,6 +34,108 @@ const DEFAULT_FRAMES: [u32; 9] = [6, 8, 8, 4, 5, 8, 6, 6, 6];
 
 /// 会话状态面板布局：(窗口内容总高度, 面板 top, 面板高度)，单位逻辑像素。
 static OVERLAY_LAYOUT: OnceLock<Mutex<(f64, f64, f64)>> = OnceLock::new();
+
+static WALK_GENERATION: AtomicU64 = AtomicU64::new(0);
+static LAST_POINTER_INSIDE: AtomicU64 = AtomicU64::new(0);
+
+fn cancel_walk() {
+    WALK_GENERATION.fetch_add(1, Ordering::Relaxed);
+}
+
+fn walk_to(app: &AppHandle, target_left: i32, target_top: i32, reason: &str) {
+    let generation = WALK_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    let app = app.clone();
+    let reason = reason.to_string();
+    std::thread::spawn(move || {
+        let Some(window) = app.get_webview_window("pet") else { return; };
+        let Ok(start) = window.outer_position() else { return; };
+        let dx = target_left - start.x;
+        let dy = target_top - start.y;
+        if dx.abs() < 2 && dy.abs() < 2 { return; }
+        let steps = (dx.abs().max(dy.abs()) / 12).max(1);
+        let _ = app.emit("pet:walk", json!({
+            "state": "start",
+            "reason": reason,
+            "dx": dx,
+            "dy": dy,
+        }));
+        for i in 1..=steps {
+            if WALK_GENERATION.load(Ordering::Relaxed) != generation {
+                let _ = app.emit("pet:walk", json!({"state": "end", "reason": reason}));
+                return;
+            }
+            let t = i as f64 / steps as f64;
+            let x = start.x + (dx as f64 * t).round() as i32;
+            let y = start.y + (dy as f64 * t).round() as i32;
+            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+            std::thread::sleep(Duration::from_millis(16));
+        }
+        let _ = app.emit("pet:walk", json!({"state": "end", "reason": reason}));
+        log_msg(&format!("walk: {reason} -> ({target_left},{target_top})"));
+    });
+}
+
+fn mark_cursor_position(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("pet") else { return; };
+    let Ok(cursor) = window.cursor_position() else { return; };
+    let Ok(size) = window.outer_size() else { return; };
+    let Ok(scale) = window.scale_factor() else { return; };
+    let Ok(monitors) = window.available_monitors() else { return; };
+    let monitor = monitors.iter().find(|monitor| {
+        let origin = monitor.position();
+        let msize = monitor.size();
+        cursor.x >= origin.x as f64
+            && cursor.x < (origin.x + msize.width as i32) as f64
+            && cursor.y >= origin.y as f64
+            && cursor.y < (origin.y + msize.height as i32) as f64
+    }).cloned().or_else(|| window.current_monitor().ok().flatten());
+    let Some(monitor) = monitor else { return; };
+    let left = cursor.x as i32 - size.width as i32 / 2;
+    // 窗口底边 = 宠物脚下；允许窗口顶部延伸到屏幕外，这样标记屏幕上半部时
+    // 宠物视觉上也能到达鼠标位置，而不是被窗口高度限制在屏幕下半区。
+    let top = cursor.y as i32 - size.height as i32 + (6.0 * scale) as i32;
+    log_msg(&format!("shortcut: mark cursor=({:.0},{:.0}) -> window=({left},{top})", cursor.x, cursor.y));
+    walk_to(app, left, top, "mark");
+}
+
+fn spawn_wander_loop(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut seed = now_ms().max(1);
+        loop {
+            std::thread::sleep(Duration::from_secs(24));
+            let now = now_ms();
+            if now.saturating_sub(LAST_POINTER_INSIDE.load(Ordering::Relaxed)) < 15_000 {
+                continue;
+            }
+            let state = collect_state();
+            if state.phase != "idle" || state.active_count > 0 {
+                continue;
+            }
+            let Some(window) = app.get_webview_window("pet") else { continue; };
+            let Ok(size) = window.outer_size() else { continue; };
+            let Ok(scale) = window.scale_factor() else { continue; };
+            let monitor = match window.current_monitor().ok().flatten() {
+                Some(monitor) => monitor,
+                None => continue,
+            };
+            let origin = monitor.position();
+            let msize = monitor.size();
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let rx = ((seed >> 16) % 100) as f64 / 100.0;
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let ry = ((seed >> 16) % 100) as f64 / 100.0;
+            let target_x = origin.x as f64 + msize.width as f64 * (0.15 + rx * 0.7);
+            let target_y = origin.y as f64 + msize.height as f64 * (0.45 + ry * 0.45);
+            let left = target_x as i32 - size.width as i32 / 2;
+            let top = target_y as i32 - size.height as i32 + (6.0 * scale) as i32;
+            let current = window.outer_position().unwrap_or(*origin);
+            if (current.x - left).abs() + (current.y - top).abs() < 80 {
+                continue;
+            }
+            walk_to(&app, left, top, "wander");
+        }
+    });
+}
 
 fn overlay_layout() -> (f64, f64, f64) {
     OVERLAY_LAYOUT
@@ -1561,6 +1665,7 @@ fn ack_session(session_id: String) -> Result<(), String> {
 
 #[tauri::command]
 fn start_drag(window: WebviewWindow) -> Result<(), String> {
+    cancel_walk();
     window.start_dragging().map_err(|e| e.to_string())
 }
 
@@ -1692,6 +1797,9 @@ fn spawn_hover_loop(window: WebviewWindow, pet_size: u32) {
                     && y <= (panel_top + panel_height + 4.0) * scale
                     && x >= 8.0 * scale
                     && x <= size.width as f64 - 8.0 * scale;
+                if pet_hit || panel_hit {
+                    LAST_POINTER_INSIDE.store(now_ms(), Ordering::Relaxed);
+                }
                 Some(pet_hit || panel_hit)
             })();
 
@@ -1903,6 +2011,19 @@ fn main() {
                 std::env::args().collect::<Vec<_>>(),
                 std::env::var("DSH_PET_MANAGED").ok()
             ));
+            app.handle().plugin(
+                tauri_plugin_global_shortcut::Builder::new()
+                    .with_shortcuts(["alt+shift+p"])?
+                    .with_handler(|app, shortcut, event| {
+                        if event.state == ShortcutState::Pressed
+                            && shortcut.matches(Modifiers::ALT | Modifiers::SHIFT, Code::KeyP)
+                        {
+                            mark_cursor_position(app);
+                        }
+                    })
+                    .build(),
+            )?;
+
             let window = app
                 .get_webview_window("pet")
                 .ok_or("missing pet window in tauri.conf.json")?;
@@ -1944,6 +2065,7 @@ fn main() {
             apply_visibility(app.handle(), &initial_settings);
 
             spawn_state_loop(app.handle().clone());
+            spawn_wander_loop(app.handle().clone());
             write_config(&config);
 
             // 由 DSH 启动器插件拉起时带 --managed：DSH 退出/被强杀后自己退出，

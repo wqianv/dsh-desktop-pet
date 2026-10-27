@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop-pet",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "description": "A true OS-level desktop pet for DeepSeek Harness: transparent, always-on-top overlay + moddable pet packs.",
   "scripts": {

@@ -87,6 +87,7 @@ let dragAnim = false
 let idleTimers = []
 const idlePlayed = new Set()
 let lastCostAt = 0
+let externalWalk = false
 const SESSION_MODE_KEY = 'dsh-pet-session-panel-mode'
 let sessionPanelMode = 'expanded'
 try {
@@ -683,6 +684,28 @@ if (sessionsClearBtn) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 桌面移动：快捷键标记 / 自动散步                                     */
+/* ------------------------------------------------------------------ */
+
+function onWalkEvent(event) {
+  if (!event) return
+  if (event.state === 'start') {
+    externalWalk = true
+    clearIdleActions()
+    const id = event.dx < 0 ? 'walk-left' : 'walk-right'
+    const hasWalk = behavior.animations && behavior.animations[id]
+    if (hasWalk) playAnimation(id, { loop: true })
+    else playAnimation('walk-right', { loop: true })
+    if (event.reason === 'mark') showBubble('跑过去看看…', 1800)
+    return
+  }
+  if (event.state === 'end') {
+    externalWalk = false
+    playPhase(state.phase || 'idle')
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* 状态更新                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -695,13 +718,13 @@ function onState(next) {
 
   if (phaseChanged) {
     if (prev && prev.phase === 'idle' && state.phase !== 'idle') idlePlayed.clear()
-    if (!interactionActive && !dragAnim) {
+    if (!externalWalk && !interactionActive && !dragAnim) {
       playPhase(state.phase || 'idle')
       showBubbleForPhase(state)
     }
     if (state.phase === 'idle') scheduleIdleActions()
     else clearIdleActions()
-  } else if (prev && prev.activeCount !== state.activeCount && !interactionActive && !dragAnim) {
+  } else if (prev && prev.activeCount !== state.activeCount && !externalWalk && !interactionActive && !dragAnim) {
     showBubbleForPhase(state)
   }
   maybeShowCost(prev, state)
@@ -866,6 +889,7 @@ async function boot() {
   renderSessionPanel(state)
 
   window.petAPI.onState(onState)
+  if (window.petAPI.onWalk) window.petAPI.onWalk(onWalkEvent)
   if (window.petAPI.onPack) {
     window.petAPI.onPack((pack) => {
       if (pack && pack.id) applyPack(pack)

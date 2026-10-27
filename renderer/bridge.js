@@ -43,6 +43,12 @@
       }
     },
 
+    onWalk(callback) {
+      if (listen) {
+        listen('pet:walk', (event) => callback(event.payload)).catch(() => {})
+      }
+    },
+
     onSettings(callback) {
       if (listen) {
         listen('pet:settings', (event) => callback(event.payload)).catch(() => {})
