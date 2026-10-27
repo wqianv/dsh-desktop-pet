@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop-pet-launcher",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Launch dsh-desktop-pet with DSH + bridge session state and per-turn cost",
   "type": "module",
   "main": "index.js",
