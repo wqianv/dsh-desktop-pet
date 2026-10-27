@@ -52,6 +52,7 @@ CI 在 `.github/workflows/ci.yml`：`validate-pet-pack --all` + JS `node --check
 | 高负载 | Agent 连续跑工具 | CPU idle 低；状态实时（桥 <1s） |
 | 多显示器 | 拖到另一块屏 | 不跑到屏幕外；托盘“移到当前屏幕” |
 | Retina / 缩放 | 在 Retina 屏（dpr=2）启动/换屏 | 宠物完整显示，头顶/左右不裁切；窗口逻辑尺寸 280×320 左右 |
+| 非前台拖动 | 切到 Finder/其他 app，直接按住桌宠拖动 | 第一次按下就能拖，不需要先点一下激活 |
 | DSH 重启时宠物在跑 | 手动开着宠物重启 DSH | 不出现空窗（5 秒兜底拉起） |
 
 ## 3.5 Release 构建检查
