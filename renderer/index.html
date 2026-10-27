@@ -11,11 +11,10 @@
     <div id="sessions" class="sessions" hidden>
       <div class="sessions-head">
         <div class="sessions-heading"><span class="sessions-mark"></span>会话状态<span id="sessionCount" class="sessions-count"></span></div>
-        <div class="sessions-actions">
-          <button id="sessionsCollapse" class="sessions-btn" type="button" title="折叠">–</button>
-          <button id="sessionsHide" class="sessions-btn" type="button" title="隐藏">×</button>
-        </div>
+        <div id="sessionBar" class="session-bar" hidden></div>
+        <button id="sessionsToggle" class="sessions-toggle" type="button" title="收起/展开">⌄</button>
       </div>
+      <div id="sessionToast" class="session-toast" hidden></div>
       <div id="sessionList" class="session-list"></div>
       <div class="sessions-foot"><button id="sessionsClear" class="sessions-clear" type="button">清空已完结提醒</button></div>
     </div>

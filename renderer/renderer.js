@@ -61,8 +61,9 @@ const debugEl = document.getElementById('debug')
 const sessionsEl = document.getElementById('sessions')
 const sessionListEl = document.getElementById('sessionList')
 const sessionCountEl = document.getElementById('sessionCount')
-const sessionsCollapseBtn = document.getElementById('sessionsCollapse')
-const sessionsHideBtn = document.getElementById('sessionsHide')
+const sessionsToggleBtn = document.getElementById('sessionsToggle')
+const sessionBarEl = document.getElementById('sessionBar')
+const sessionToastEl = document.getElementById('sessionToast')
 const sessionsClearBtn = document.getElementById('sessionsClear')
 
 let bootstrap = null
@@ -88,11 +89,13 @@ const idlePlayed = new Set()
 let lastCostAt = 0
 const SESSION_MODE_KEY = 'dsh-pet-session-panel-mode'
 let sessionPanelMode = 'expanded'
-try { sessionPanelMode = localStorage.getItem(SESSION_MODE_KEY) || 'expanded' } catch {}
-let sessionSeen = new Set()
-let sessionSeenInit = false
+try {
+  const stored = localStorage.getItem(SESSION_MODE_KEY)
+  if (stored === 'collapsed' || stored === 'expanded') sessionPanelMode = stored
+  else if (stored === 'hidden') sessionPanelMode = 'collapsed'
+} catch {}
 const sessionAcks = new Map()
-let lastOverlayHeight = 0
+let lastOverlayLayout = ''
 
 /* ------------------------------------------------------------------ */
 /* 工具函数                                                           */
@@ -270,6 +273,11 @@ function hideBubble() {
   bubbleTimer = null
   bubbleEl.hidden = true
   bubbleEl.textContent = ''
+  if (sessionToastEl) {
+    sessionToastEl.hidden = true
+    sessionToastEl.textContent = ''
+    if (sessionsEl && !sessionsEl.hidden) scheduleOverlayHeight()
+  }
 }
 
 function showBubble(text, ttlMs) {
@@ -279,8 +287,26 @@ function showBubble(text, ttlMs) {
   }
   if (bubbleTimer) clearTimeout(bubbleTimer)
   bubbleTimer = null
-  bubbleEl.hidden = false
-  bubbleEl.textContent = text
+  // 面板可见时，把气泡收纳进面板内部，避免和标题/状态行重叠。
+  if (sessionsEl && !sessionsEl.hidden) {
+    bubbleEl.hidden = true
+    bubbleEl.textContent = ''
+    if (sessionPanelMode === 'expanded' && sessionToastEl) {
+      sessionToastEl.hidden = false
+      sessionToastEl.textContent = text
+      scheduleOverlayHeight()
+    } else if (sessionToastEl) {
+      sessionToastEl.hidden = true
+      sessionToastEl.textContent = ''
+    }
+  } else {
+    if (sessionToastEl) {
+      sessionToastEl.hidden = true
+      sessionToastEl.textContent = ''
+    }
+    bubbleEl.hidden = false
+    bubbleEl.textContent = text
+  }
   if (ttlMs > 0) bubbleTimer = setTimeout(hideBubble, ttlMs)
 }
 
@@ -494,22 +520,28 @@ function persistPanelMode() {
   try { localStorage.setItem(SESSION_MODE_KEY, sessionPanelMode) } catch {}
 }
 
-function applyOverlayHeight(height) {
-  if (!window.petAPI || !window.petAPI.setOverlayHeight) return
-  const next = Math.max(0, Math.round(height))
-  if (next === lastOverlayHeight) return
-  lastOverlayHeight = next
-  window.petAPI.setOverlayHeight(next).catch(() => {})
+function applyOverlayLayout(totalHeight, panelTop, panelHeight) {
+  if (!window.petAPI || !window.petAPI.setOverlayLayout) return
+  const total = Math.max(0, Math.round(totalHeight))
+  const top = Math.max(0, Math.round(panelTop))
+  const height = Math.max(0, Math.round(panelHeight))
+  const key = `${total}:${top}:${height}`
+  if (key === lastOverlayLayout) return
+  lastOverlayLayout = key
+  window.petAPI.setOverlayLayout(total, top, height).catch(() => {})
 }
 
 function scheduleOverlayHeight() {
   requestAnimationFrame(() => {
     if (!sessionsEl || sessionsEl.hidden) {
-      applyOverlayHeight(0)
+      applyOverlayLayout(0, 0, 0)
       return
     }
-    const height = sessionsEl.getBoundingClientRect().height
-    applyOverlayHeight(height + 12)
+    const rect = sessionsEl.getBoundingClientRect()
+    const petHeight = petEl ? petEl.getBoundingClientRect().height : 216
+    // 面板尽量贴着宠物：窗口总高 = 宠物元素高 + 面板高 + 一点留白。
+    // 宠物图集顶部有一定透明边，所以视觉上仍留出小间距。
+    applyOverlayLayout(Math.ceil(petHeight + rect.height + 4), rect.top, rect.height)
   })
 }
 
@@ -538,19 +570,6 @@ async function clearFinishedReminders() {
 function renderSessionPanel(current) {
   if (!sessionsEl || !sessionListEl) return
   const entries = panelEntries(current || {})
-  const reminderKeys = entries.map(sessionReminderKey).filter(Boolean)
-  if (!sessionSeenInit) {
-    sessionSeenInit = true
-    for (const key of reminderKeys) sessionSeen.add(key)
-  } else {
-    const hasNewReminder = reminderKeys.some((key) => !sessionSeen.has(key))
-    for (const key of reminderKeys) sessionSeen.add(key)
-    if (hasNewReminder) {
-      // 用户隐藏面板后，新完成的会话/新的提问会自动重新弹出。
-      sessionPanelMode = 'expanded'
-      persistPanelMode()
-    }
-  }
 
   if (!entries.length) {
     sessionsEl.hidden = true
@@ -559,17 +578,32 @@ function renderSessionPanel(current) {
     return
   }
 
-  if (sessionPanelMode === 'hidden') {
-    sessionsEl.hidden = true
-    scheduleOverlayHeight()
-    return
-  }
-
   sessionsEl.hidden = false
   sessionsEl.classList.toggle('collapsed', sessionPanelMode === 'collapsed')
+  if (!bubbleEl.hidden && bubbleEl.textContent) {
+    if (sessionPanelMode === 'expanded' && sessionToastEl) {
+      sessionToastEl.hidden = false
+      sessionToastEl.textContent = bubbleEl.textContent
+    }
+    bubbleEl.hidden = true
+    bubbleEl.textContent = ''
+  }
+  if (sessionsToggleBtn) sessionsToggleBtn.textContent = sessionPanelMode === 'collapsed' ? '⌃' : '⌄'
   const clearable = entries.some((entry) => entry.reminder && entry.phase !== 'waiting')
   sessionsEl.classList.toggle('has-done', clearable)
   sessionCountEl.textContent = String(entries.length)
+
+  // 收起后变成 codex 风格灯条：只显示每行一个状态圆点。
+  if (sessionBarEl) {
+    sessionBarEl.textContent = ''
+    sessionBarEl.hidden = sessionPanelMode !== 'collapsed'
+    for (const entry of entries) {
+      const dot = document.createElement('span')
+      dot.className = `session-bar-dot ${sessionKind(entry)}`
+      dot.title = entry.title || entry.sessionId || ''
+      sessionBarEl.appendChild(dot)
+    }
+  }
 
   sessionListEl.textContent = ''
   for (const entry of entries) {
@@ -609,21 +643,17 @@ function renderSessionPanel(current) {
   scheduleOverlayHeight()
 }
 
-if (sessionsCollapseBtn) {
-  sessionsCollapseBtn.addEventListener('click', () => {
+if (sessionsToggleBtn) {
+  sessionsToggleBtn.addEventListener('click', (event) => {
+    event.stopPropagation()
     sessionPanelMode = sessionPanelMode === 'collapsed' ? 'expanded' : 'collapsed'
     persistPanelMode()
     renderSessionPanel(state)
   })
 }
-if (sessionsHideBtn) {
-  sessionsHideBtn.addEventListener('click', () => {
-    sessionPanelMode = 'hidden'
-    // 隐藏时把当前提醒标记为已看到，避免下一次状态刷新又自动弹出来。
-    for (const entry of panelEntries(state)) {
-      const key = sessionReminderKey(entry)
-      if (key) sessionSeen.add(key)
-    }
+if (sessionBarEl) {
+  sessionBarEl.addEventListener('click', () => {
+    sessionPanelMode = 'expanded'
     persistPanelMode()
     renderSessionPanel(state)
   })

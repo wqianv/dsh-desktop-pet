@@ -58,6 +58,7 @@ body {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(6px);
   pointer-events: none;
+  z-index: 30;
 }
 
 .bubble::after {
@@ -83,6 +84,20 @@ body {
   font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
   pointer-events: none;
 }
+
+.session-toast {
+  margin: 0 6px 5px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.09);
+  color: #e8f2ff;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+}
+.sessions.collapsed .session-toast { display: none !important; }
 
 /* 会话状态面板：在宠物上方，窗口会随高度变化 */
 .sessions {
@@ -114,13 +129,27 @@ body {
   background: linear-gradient(180deg, #4fd18b 0 33%, #f5c451 33% 66%, #f26d6d 66% 100%);
 }
 .sessions-count { color: #9fb6d6; font-weight: 500; }
-.sessions-actions { display: flex; gap: 3px; }
-.sessions-btn {
-  width: 22px; height: 22px; border: 0; border-radius: 6px;
+.sessions-toggle {
+  width: 22px; height: 22px; flex: 0 0 22px; border: 0; border-radius: 6px;
   background: transparent; color: #b9cbe5; cursor: pointer;
-  font: 16px/1 -apple-system, sans-serif; padding: 0;
+  font: 17px/1 -apple-system, sans-serif; padding: 0;
+  transition: transform .15s ease;
 }
-.sessions-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.sessions-toggle:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.session-bar {
+  flex: 1;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 0 6px;
+}
+.session-bar-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; }
+.session-bar-dot.done { background: #4fd18b; }
+.session-bar-dot.waiting { background: #f5c451; }
+.session-bar-dot.failed { background: #f26d6d; }
+.session-bar-dot.running { background: #64a8ff; }
+.session-bar-empty { color: #91a8c7; font-size: 10.5px; }
 .session-list { padding: 0 6px 4px; }
 .session-row {
   display: flex; align-items: center; gap: 7px;
@@ -147,6 +176,11 @@ body {
 .sessions-clear:hover { background: rgba(255,255,255,.1); color: #fff; }
 .sessions-foot { display: none; }
 .sessions.has-done .sessions-foot { display: flex; }
-.sessions.collapsed .session-list, .sessions.collapsed .sessions-foot { display: none; }
-.sessions.collapsed .sessions-head { height: 26px; }
-.sessions.collapsed .sessions-mark { display: none; }
+.sessions.collapsed { width: auto; max-width: calc(100% - 16px); }
+.sessions.collapsed .sessions-heading, .sessions.collapsed .session-list, .sessions.collapsed .sessions-foot { display: none; }
+.sessions.collapsed .session-bar { display: flex; }
+.sessions.collapsed .sessions-toggle { display: none; }
+.sessions.collapsed .sessions-head { height: 22px; padding: 0 5px 0 7px; }
+.sessions.collapsed .session-bar { padding: 0 2px; }
+.sessions.has-new .session-mark { animation: sessionPulse .9s ease 2; }
+@keyframes sessionPulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }

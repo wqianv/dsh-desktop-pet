@@ -25,8 +25,8 @@
 
     getSettings: () => invoke('get_settings'),
 
-    setOverlayHeight(height) {
-      return invoke('set_overlay_height', { height })
+    setOverlayLayout(totalHeight, panelTop, panelHeight) {
+      return invoke('set_overlay_layout', { totalHeight, panelTop, panelHeight })
     },
 
     ackSession(sessionId) {

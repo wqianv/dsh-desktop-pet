@@ -30,15 +30,15 @@ use objc2_foundation::NSData;
 
 const DEFAULT_FRAMES: [u32; 9] = [6, 8, 8, 4, 5, 8, 6, 6, 6];
 
-/// 会话状态面板当前占用的逻辑高度（0 = 隐藏/折叠到没有）。
-static OVERLAY_HEIGHT: OnceLock<Mutex<f64>> = OnceLock::new();
+/// 会话状态面板布局：(窗口内容总高度, 面板 top, 面板高度)，单位逻辑像素。
+static OVERLAY_LAYOUT: OnceLock<Mutex<(f64, f64, f64)>> = OnceLock::new();
 
-fn overlay_height() -> f64 {
-    OVERLAY_HEIGHT
-        .get_or_init(|| Mutex::new(0.0))
+fn overlay_layout() -> (f64, f64, f64) {
+    OVERLAY_LAYOUT
+        .get_or_init(|| Mutex::new((0.0, 0.0, 0.0)))
         .lock()
         .map(|value| *value)
-        .unwrap_or(0.0)
+        .unwrap_or((0.0, 0.0, 0.0))
 }
 
 /* ------------------------------------------------------------------ */
@@ -1500,37 +1500,38 @@ fn set_ignore(window: WebviewWindow, ignore: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_overlay_height(app: AppHandle, height: f64) -> Result<(), String> {
-    let height = height.clamp(0.0, 420.0);
-    let state = OVERLAY_HEIGHT.get_or_init(|| Mutex::new(0.0));
+fn set_overlay_layout(app: AppHandle, total_height: f64, panel_top: f64, panel_height: f64) -> Result<(), String> {
+    let total_height = total_height.clamp(0.0, 900.0);
+    let panel_top = panel_top.clamp(0.0, 900.0);
+    let panel_height = panel_height.clamp(0.0, 600.0);
+    let config = read_config();
+    let base_width = config.size as f64 * 192.0 / 208.0 + 96.0;
+    let base_height = config.size as f64 + 120.0;
+    let target_height = if total_height > 0.0 { total_height } else { base_height };
+    let state = OVERLAY_LAYOUT.get_or_init(|| Mutex::new((base_height, 0.0, 0.0)));
     let previous = {
         let mut guard = state.lock().map_err(|e| e.to_string())?;
-        let old = *guard;
-        *guard = height;
+        let old = guard.0;
+        *guard = (target_height, panel_top, panel_height);
         old
     };
-    if (previous - height).abs() < 0.5 {
+    let delta = target_height - previous;
+    if delta.abs() < 0.5 {
         return Ok(());
     }
     let Some(window) = app.get_webview_window("pet") else {
         return Ok(());
     };
-    let config = read_config();
-    let base_width = config.size as f64 * 192.0 / 208.0 + 96.0;
-    let base_height = config.size as f64 + 120.0;
     let old_pos = window.outer_position().map_err(|e| e.to_string())?;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    // set_size 后 outer_size 可能还是旧值；用逻辑高度差换算物理位移，保证窗口上沿向上长、底边不动。
-    let delta = height - previous;
     window
-        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(base_width, base_height + height)))
+        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(base_width, target_height)))
         .map_err(|e| e.to_string())?;
+    // 窗口底边固定，高度变化时上沿移动；不能依赖 set_size 后立即读 outer_size。
     let new_y = old_pos.y - (delta * scale).round() as i32;
     let _ = window.set_position(tauri::PhysicalPosition::new(old_pos.x, new_y));
     log_msg(&format!(
-        "overlay: height={height:.1} delta={delta:.1} -> y={new_y} logical={}x{}",
-        base_width,
-        base_height + height
+        "overlay: total={target_height:.1} panelTop={panel_top:.1} panelH={panel_height:.1} delta={delta:.1} y={new_y}"
     ));
     Ok(())
 }
@@ -1684,11 +1685,11 @@ fn spawn_hover_loop(window: WebviewWindow, pet_size: u32) {
                 let y = cur.y - pos.y as f64;
                 let pet_hit = x >= left && x <= right && y >= top && y <= bottom;
 
-                // 上方状态面板也必须是可点击区域，否则点折叠/清除会穿透。
-                let panel_h = overlay_height() * scale;
-                let panel_hit = panel_h > 4.0
-                    && y >= 0.0
-                    && y <= panel_h + 18.0 * scale
+                // 上方状态面板/灯条也必须是可点击区域，否则点箭头会穿透。
+                let (_total, panel_top, panel_height) = overlay_layout();
+                let panel_hit = panel_height > 4.0
+                    && y >= panel_top * scale
+                    && y <= (panel_top + panel_height + 4.0) * scale
                     && x >= 8.0 * scale
                     && x <= size.width as f64 - 8.0 * scale;
                 Some(pet_hit || panel_hit)
@@ -1887,7 +1888,7 @@ fn main() {
             frontend_ready,
             frontend_log,
             get_settings,
-            set_overlay_height,
+            set_overlay_layout,
             ack_session,
             set_ignore,
             show_context_menu,
@@ -1927,6 +1928,9 @@ fn main() {
             let height = config.size as f64 + 120.0;
             let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
             position_window(&window);
+            if let Ok(mut layout) = OVERLAY_LAYOUT.get_or_init(|| Mutex::new((height, 0.0, 0.0))).lock() {
+                *layout = (height, 0.0, 0.0);
+            }
 
             window.set_ignore_cursor_events(true)?;
             window.set_always_on_top(true)?;
