@@ -32,6 +32,9 @@ const DEFAULT_PET_SETTINGS = {
   showBalance: true,
   showPrioritySessions: true,
   showCost: true,
+  autoWander: true,
+  idleActions: true,
+  markShortcut: true,
   packId: null,
   icons: { app: null, tray: null },
 }
@@ -399,7 +402,7 @@ function writePetSettings(settings) {
 function sanitizePetSettings(input) {
   const current = readPetSettings()
   const next = { ...current, icons: { ...current.icons } }
-  for (const key of ['autoStart', 'showDockIcon', 'showTrayIcon', 'showBalance', 'showPrioritySessions', 'showCost']) {
+  for (const key of ['autoStart', 'showDockIcon', 'showTrayIcon', 'showBalance', 'showPrioritySessions', 'showCost', 'autoWander', 'idleActions', 'markShortcut']) {
     if (typeof input?.[key] === 'boolean') next[key] = input[key]
   }
   if (typeof input?.packId === 'string' || input?.packId === null) next.packId = input.packId

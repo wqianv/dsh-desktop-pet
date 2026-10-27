@@ -71,7 +71,7 @@ let packs = []
 let activePack = null
 let behavior = DEFAULT_BEHAVIOR
 let state = { phase: 'idle', activeCount: 0, toolFamily: null }
-let displaySettings = { showBalance: true, showPrioritySessions: true, showCost: true }
+let displaySettings = { showBalance: true, showPrioritySessions: true, showCost: true, autoWander: true, idleActions: true, markShortcut: true }
 let frameTimer = null
 let playToken = 0
 let bubbleTimer = null
@@ -414,6 +414,7 @@ function clearIdleActions() {
 
 function scheduleIdleActions() {
   clearIdleActions()
+  if (displaySettings.idleActions === false) return
   if (!activePack || state.phase !== 'idle' || interactionActive || dragAnim) return
   const actions = (behavior.interactions && behavior.interactions.idleActions) || []
   actions.forEach((action, index) => {
@@ -903,6 +904,8 @@ async function boot() {
   if (window.petAPI.onSettings) {
     window.petAPI.onSettings((next) => {
       displaySettings = { ...displaySettings, ...(next || {}) }
+      if (displaySettings.idleActions === false) clearIdleActions()
+      else if (state.phase === 'idle') scheduleIdleActions()
       if (!interactionActive && !dragAnim) showBubbleForPhase(state)
     })
   }

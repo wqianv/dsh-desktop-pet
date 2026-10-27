@@ -69,6 +69,11 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
       ['showDockIcon', '显示 Dock 图标', '在程序坞显示桌宠图标。'],
       ['showTrayIcon', '显示菜单栏图标', '在右上角菜单栏显示托盘图标。'],
     ]
+    const LEISURE_TOGGLES = [
+      ['autoWander', '自动散步', 'DSH 空闲时，桌宠会在桌面范围内随机走动。'],
+      ['idleActions', '挂机小动作', '发呆、睡觉、伸懒腰等无操作时的随机动作。'],
+      ['markShortcut', '快捷键召唤', 'Option+Shift+P 标记鼠标位置，桌宠跑过去；关闭后快捷键不生效。'],
+    ]
 
     function IconRow({ kind, title, hint, exists, busy, onPick, onReset }) {
       const inputRef = useRef(null)
@@ -271,6 +276,17 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
             }, '刷新'))),
         h('div', { className: 'pet-group' }, '显示'),
         h('div', null, TOGGLES.map(([key, label, hint]) => h('div', { className: 'pet-row', key },
+          h('div', null,
+            h('div', { className: 'pet-label' }, label),
+            h('div', { className: 'pet-hint' }, hint)),
+          h('input', {
+            type: 'checkbox',
+            checked: settings[key] === true,
+            disabled: busy,
+            onChange: (event) => update(key, event.target.checked),
+          })))),
+        h('div', { className: 'pet-group' }, '休闲功能'),
+        h('div', null, LEISURE_TOGGLES.map(([key, label, hint]) => h('div', { className: 'pet-row', key },
           h('div', null,
             h('div', { className: 'pet-label' }, label),
             h('div', { className: 'pet-hint' }, hint)),

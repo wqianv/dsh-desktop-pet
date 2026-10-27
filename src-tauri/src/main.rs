@@ -80,16 +80,6 @@ fn mark_cursor_position(app: &AppHandle) {
     let Ok(cursor) = window.cursor_position() else { return; };
     let Ok(size) = window.outer_size() else { return; };
     let Ok(scale) = window.scale_factor() else { return; };
-    let Ok(monitors) = window.available_monitors() else { return; };
-    let monitor = monitors.iter().find(|monitor| {
-        let origin = monitor.position();
-        let msize = monitor.size();
-        cursor.x >= origin.x as f64
-            && cursor.x < (origin.x + msize.width as i32) as f64
-            && cursor.y >= origin.y as f64
-            && cursor.y < (origin.y + msize.height as i32) as f64
-    }).cloned().or_else(|| window.current_monitor().ok().flatten());
-    let Some(monitor) = monitor else { return; };
     let left = cursor.x as i32 - size.width as i32 / 2;
     // 窗口底边 = 宠物脚下；允许窗口顶部延伸到屏幕外，这样标记屏幕上半部时
     // 宠物视觉上也能到达鼠标位置，而不是被窗口高度限制在屏幕下半区。
@@ -103,6 +93,9 @@ fn spawn_wander_loop(app: AppHandle) {
         let mut seed = now_ms().max(1);
         loop {
             std::thread::sleep(Duration::from_secs(24));
+            if !read_settings().auto_wander {
+                continue;
+            }
             let now = now_ms();
             if now.saturating_sub(LAST_POINTER_INSIDE.load(Ordering::Relaxed)) < 15_000 {
                 continue;
@@ -260,6 +253,9 @@ struct PetSettings {
     show_balance: bool,
     show_priority_sessions: bool,
     show_cost: bool,
+    auto_wander: bool,
+    idle_actions: bool,
+    mark_shortcut: bool,
     pack_id: Option<String>,
     icons: IconSettings,
 }
@@ -274,6 +270,9 @@ impl Default for PetSettings {
             show_balance: true,
             show_priority_sessions: true,
             show_cost: true,
+            auto_wander: true,
+            idle_actions: true,
+            mark_shortcut: true,
             pack_id: None,
             icons: IconSettings::default(),
         }
@@ -286,6 +285,9 @@ struct DisplaySettings {
     show_balance: bool,
     show_priority_sessions: bool,
     show_cost: bool,
+    auto_wander: bool,
+    idle_actions: bool,
+    mark_shortcut: bool,
 }
 
 impl From<&PetSettings> for DisplaySettings {
@@ -294,6 +296,9 @@ impl From<&PetSettings> for DisplaySettings {
             show_balance: settings.show_balance,
             show_priority_sessions: settings.show_priority_sessions,
             show_cost: settings.show_cost,
+            auto_wander: settings.auto_wander,
+            idle_actions: settings.idle_actions,
+            mark_shortcut: settings.mark_shortcut,
         }
     }
 }
@@ -1181,6 +1186,9 @@ fn spawn_state_loop(app: AppHandle) {
                             activate_pack(&handle, &pack_id);
                         }
                     }
+                    if !settings.auto_wander {
+                        cancel_walk();
+                    }
                     rebuild_tray(&handle);
                     apply_icons(&handle);
                     emit_display_settings(&handle);
@@ -1511,12 +1519,15 @@ fn settings_submenu(app: &AppHandle, prefix: &str) -> tauri::Result<Submenu<taur
     let autostart = CheckMenuItem::with_id(app, format!("{prefix}-autostart"), "随 DSH 启动", true, settings.auto_start, None::<&str>)?;
     let dock = CheckMenuItem::with_id(app, format!("{prefix}-dock"), "显示 Dock 图标", true, settings.show_dock_icon, None::<&str>)?;
     let tray = CheckMenuItem::with_id(app, format!("{prefix}-tray"), "显示菜单栏图标", true, settings.show_tray_icon, None::<&str>)?;
+    let wander = CheckMenuItem::with_id(app, format!("{prefix}-wander"), "自动散步", true, settings.auto_wander, None::<&str>)?;
+    let idle = CheckMenuItem::with_id(app, format!("{prefix}-idle"), "挂机小动作", true, settings.idle_actions, None::<&str>)?;
+    let mark = CheckMenuItem::with_id(app, format!("{prefix}-mark"), "快捷键召唤", true, settings.mark_shortcut, None::<&str>)?;
     let icons = icon_submenu(app, prefix)?;
     Submenu::with_items(
         app,
         "设置",
         true,
-        &[&balance, &priority, &cost, &autostart, &dock, &tray, &icons],
+        &[&balance, &priority, &cost, &autostart, &dock, &tray, &wander, &idle, &mark, &icons],
     )
 }
 
@@ -1542,6 +1553,9 @@ fn toggle_setting(app: &AppHandle, key: &str) {
         "autostart" => settings.auto_start = !settings.auto_start,
         "dock" => settings.show_dock_icon = !settings.show_dock_icon,
         "tray" => settings.show_tray_icon = !settings.show_tray_icon,
+        "wander" => settings.auto_wander = !settings.auto_wander,
+        "idle" => settings.idle_actions = !settings.idle_actions,
+        "mark" => settings.mark_shortcut = !settings.mark_shortcut,
         _ => return,
     }
     write_settings(&settings);
@@ -2017,6 +2031,7 @@ fn main() {
                     .with_handler(|app, shortcut, event| {
                         if event.state == ShortcutState::Pressed
                             && shortcut.matches(Modifiers::ALT | Modifiers::SHIFT, Code::KeyP)
+                            && read_settings().mark_shortcut
                         {
                             mark_cursor_position(app);
                         }
