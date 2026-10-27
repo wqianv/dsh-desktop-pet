@@ -5,4 +5,8 @@ if [[ "$(/usr/bin/uname -m)" != "arm64" ]]; then
   echo "DSH 桌宠 v0.1 只支持 Apple Silicon。" >&2
   exit 1
 fi
+if [[ ! -d "/Applications/DeepSeek Harness.app" ]]; then
+  echo "没有找到 /Applications/DeepSeek Harness.app。请先安装 DeepSeek Harness。" >&2
+  exit 1
+fi
 exit 0

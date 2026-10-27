@@ -8,7 +8,6 @@
   <readme file="readme.html"/>
   <license file="license.txt"/>
   <conclusion file="conclusion.html"/>
-  <installation-check script="installation-check"/>
   <choices-outline>
     <line choice="default"/>
   </choices-outline>
