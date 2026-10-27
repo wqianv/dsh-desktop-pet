@@ -81,7 +81,7 @@ npm run open
 - 完整干净环境/beta 清单：[`docs/TESTING.md`](docs/TESTING.md)
 - 排障信息采集：`bash scripts/doctor.sh`
 
-**v0.2.1 已提供 macOS arm64 分发包**（含 `.app`、7 个宠物包、DSH 插件和安装说明）。因为还没有 Apple Developer ID 签名/公证，首次打开需要右键 `.app` → 打开；安装参见 [`docs/INSTALL.md`](docs/INSTALL.md)。从源码构建仍然是开发方式。
+**v0.2.2 已提供 macOS arm64 分发包**（含 `.app`、7 个宠物包、DSH 插件和安装说明）。因为还没有 Apple Developer ID 签名/公证，首次打开需要右键 `.app` → 打开；安装参见 [`docs/INSTALL.md`](docs/INSTALL.md)。从源码构建仍然是开发方式。
 
 ## 它怎么工作
 

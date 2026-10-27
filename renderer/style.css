@@ -99,7 +99,7 @@ body {
 }
 .sessions.collapsed .session-toast { display: none !important; }
 
-/* 会话状态面板：在宠物上方，窗口会随高度变化 */
+/* 会话状态面板：按 shadcn/ui Card + Badge + Button 的结构/间距抄的，图标用 lucide。 */
 .sessions {
   position: absolute;
   top: 8px;
@@ -108,79 +108,176 @@ body {
   width: calc(100% - 16px);
   z-index: 20;
   border-radius: 12px;
-  background: rgba(18, 28, 44, 0.86);
-  border: 1px solid rgba(160, 200, 255, 0.22);
-  box-shadow: 0 10px 26px rgba(0, 20, 40, 0.35);
-  color: #e8f2ff;
-  backdrop-filter: blur(10px);
+  border: 1px solid hsl(217 33% 30% / .9);
+  background: hsl(222 47% 11% / .96);
+  box-shadow: 0 12px 32px hsl(222 47% 5% / .45), 0 1px 0 hsl(210 40% 98% / .06) inset;
+  color: hsl(210 40% 98%);
   overflow: hidden;
-  font: 12px/1.35 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+  font: 12px/1.4 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+.sessions * { box-sizing: border-box; }
 .sessions-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 30px;
+  gap: 8px;
+  height: 32px;
   padding: 0 7px 0 10px;
 }
-.sessions-heading { display: flex; align-items: center; gap: 6px; font-weight: 650; white-space: nowrap; }
-.sessions-mark {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: linear-gradient(180deg, #4fd18b 0 33%, #f5c451 33% 66%, #f26d6d 66% 100%);
-}
-.sessions-count { color: #9fb6d6; font-weight: 500; }
-.sessions-toggle {
-  width: 22px; height: 22px; flex: 0 0 22px; border: 0; border-radius: 6px;
-  background: transparent; color: #b9cbe5; cursor: pointer;
-  font: 17px/1 -apple-system, sans-serif; padding: 0;
-  transition: transform .15s ease;
-}
-.sessions-toggle:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
-.session-bar {
+.sessions-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.sessions-title-text { color: hsl(210 40% 98%); }
+.sessions-lights { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; width: 7px; }
+.sessions-lights i { display: block; width: 5px; height: 5px; border-radius: 999px; }
+.sessions-lights .done { background: hsl(142 71% 55%); }
+.sessions-lights .waiting { background: hsl(43 96% 56%); }
+.sessions-lights .failed { background: hsl(0 84% 65%); }
+.sessions-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: hsl(217 33% 30% / .65);
+  color: hsl(215 20% 75%);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+.sessions-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: hsl(215 20% 65%);
+  cursor: pointer;
+}
+.sessions-icon-btn:hover { background: hsl(217 33% 30% / .65); color: hsl(210 40% 98%); }
+.sessions-icon-btn svg { display: block; width: 15px; height: 15px; }
+
+/* 收起的 Codex 风格灯条：独立胶囊，圆点严格 flex 居中 */
+.session-bar {
   display: none;
   align-items: center;
-  gap: 4px;
-  overflow: hidden;
-  padding: 0 6px;
+  justify-content: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid hsl(217 33% 30% / .9);
+  background: hsl(222 47% 11% / .96);
+  box-shadow: 0 6px 18px hsl(222 47% 5% / .35);
+  white-space: nowrap;
 }
-.session-bar-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; }
-.session-bar-dot.done { background: #4fd18b; }
-.session-bar-dot.waiting { background: #f5c451; }
-.session-bar-dot.failed { background: #f26d6d; }
-.session-bar-dot.running { background: #64a8ff; }
-.session-bar-empty { color: #91a8c7; font-size: 10.5px; }
+.session-bar-dot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 999px;
+}
+.session-bar-dot.done { background: hsl(142 71% 55%); }
+.session-bar-dot.waiting { background: hsl(43 96% 56%); }
+.session-bar-dot.failed { background: hsl(0 84% 65%); }
+.session-bar-dot.running { background: hsl(213 94% 72%); }
+.session-bar-count { color: hsl(215 20% 70%); font-size: 10.5px; font-weight: 600; line-height: 1; margin-left: 1px; }
+
 .session-list { padding: 0 6px 4px; }
 .session-row {
-  display: flex; align-items: center; gap: 7px;
-  min-height: 24px; padding: 2px 4px; border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 3px 6px;
+  border-radius: 6px;
 }
-.session-row:hover { background: rgba(255, 255, 255, 0.07); }
-.session-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,.06); }
-.session-dot.done { background: #4fd18b; box-shadow: 0 0 7px rgba(79, 209, 139, .55); }
-.session-dot.waiting { background: #f5c451; box-shadow: 0 0 7px rgba(245, 196, 81, .55); }
-.session-dot.failed { background: #f26d6d; box-shadow: 0 0 7px rgba(242, 109, 109, .55); }
-.session-dot.running { background: #64a8ff; box-shadow: 0 0 7px rgba(100, 168, 255, .5); }
-.session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #dfeaff; }
-.session-state { color: #91a8c7; font-size: 10.5px; white-space: nowrap; }
+.session-row:hover { background: hsl(217 33% 30% / .35); }
+.session-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+}
+.session-dot.done { background: hsl(142 71% 55%); box-shadow: 0 0 0 3px hsl(142 71% 55% / .14); }
+.session-dot.waiting { background: hsl(43 96% 56%); box-shadow: 0 0 0 3px hsl(43 96% 56% / .14); }
+.session-dot.failed { background: hsl(0 84% 65%); box-shadow: 0 0 0 3px hsl(0 84% 65% / .14); }
+.session-dot.running { background: hsl(213 94% 72%); box-shadow: 0 0 0 3px hsl(213 94% 72% / .14); }
+.session-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(210 40% 96%);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.session-state { color: hsl(215 20% 65%); font-size: 10.5px; line-height: 1.2; white-space: nowrap; }
 .session-clear {
-  width: 18px; height: 18px; flex: 0 0 18px; border: 0; border-radius: 5px;
-  background: transparent; color: #93a9c7; cursor: pointer; font-size: 13px; line-height: 1; padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: hsl(215 20% 65%);
+  cursor: pointer;
 }
-.session-clear:hover { background: rgba(255,255,255,.12); color: #fff; }
-.sessions-foot { display: flex; justify-content: flex-end; padding: 0 8px 7px; }
-.sessions-clear {
-  border: 0; background: transparent; color: #9fb6d6; cursor: pointer;
-  font: 10.5px/1 -apple-system, sans-serif; padding: 3px 4px; border-radius: 5px;
-}
-.sessions-clear:hover { background: rgba(255,255,255,.1); color: #fff; }
-.sessions-foot { display: none; }
+.session-clear:hover { background: hsl(217 33% 30% / .65); color: hsl(210 40% 98%); }
+.session-clear svg { display: block; width: 12px; height: 12px; }
+
+.sessions-foot { display: none; justify-content: flex-end; padding: 0 8px 7px; }
 .sessions.has-done .sessions-foot { display: flex; }
-.sessions.collapsed { width: auto; max-width: calc(100% - 16px); }
-.sessions.collapsed .sessions-heading, .sessions.collapsed .session-list, .sessions.collapsed .sessions-foot { display: none; }
-.sessions.collapsed .session-bar { display: flex; }
-.sessions.collapsed .sessions-toggle { display: none; }
-.sessions.collapsed .sessions-head { height: 22px; padding: 0 5px 0 7px; }
-.sessions.collapsed .session-bar { padding: 0 2px; }
-.sessions.has-new .session-mark { animation: sessionPulse .9s ease 2; }
-@keyframes sessionPulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+.sessions-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: hsl(215 20% 65%);
+  cursor: pointer;
+  font: 10.5px/1 -apple-system, sans-serif;
+}
+.sessions-clear:hover { background: hsl(217 33% 30% / .45); color: hsl(210 40% 98%); }
+
+.sessions.collapsed {
+  width: auto;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.sessions.collapsed .sessions-head { height: auto; padding: 0; gap: 0; }
+.sessions.collapsed .sessions-title,
+.sessions.collapsed .sessions-icon-btn,
+.sessions.collapsed .session-list,
+.sessions.collapsed .sessions-foot { display: none; }
+.sessions.collapsed .session-bar { display: inline-flex; flex: 0 0 auto; height: 26px; }
+.sessions.collapsed .session-bar { padding: 0 11px; }
+.sessions.collapsed .session-toast { display: none !important; }
+

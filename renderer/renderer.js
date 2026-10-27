@@ -486,6 +486,23 @@ function endDragReaction() {
 /* 会话状态面板（绿=完成 / 黄=等你回答 / 红=失败 / 蓝=运行中）         */
 /* ------------------------------------------------------------------ */
 
+function svgIcon(pathData, size) {
+  const ns = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(ns, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '2')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  svg.setAttribute('width', String(size || 12))
+  svg.setAttribute('height', String(size || 12))
+  const path = document.createElementNS(ns, 'path')
+  path.setAttribute('d', pathData)
+  svg.appendChild(path)
+  return svg
+}
+
 function sessionKind(entry) {
   if (!entry) return 'running'
   if (entry.phase === 'waiting' || entry.reminder === 'waiting') return 'waiting'
@@ -588,7 +605,6 @@ function renderSessionPanel(current) {
     bubbleEl.hidden = true
     bubbleEl.textContent = ''
   }
-  if (sessionsToggleBtn) sessionsToggleBtn.textContent = sessionPanelMode === 'collapsed' ? '⌃' : '⌄'
   const clearable = entries.some((entry) => entry.reminder && entry.phase !== 'waiting')
   sessionsEl.classList.toggle('has-done', clearable)
   sessionCountEl.textContent = String(entries.length)
@@ -603,6 +619,10 @@ function renderSessionPanel(current) {
       dot.title = entry.title || entry.sessionId || ''
       sessionBarEl.appendChild(dot)
     }
+    const count = document.createElement('span')
+    count.className = 'session-bar-count'
+    count.textContent = String(entries.length)
+    sessionBarEl.appendChild(count)
   }
 
   sessionListEl.textContent = ''
@@ -631,7 +651,7 @@ function renderSessionPanel(current) {
       clear.className = 'session-clear'
       clear.type = 'button'
       clear.title = '清掉这条提醒'
-      clear.textContent = '×'
+      clear.appendChild(svgIcon('M18 6 6 18M6 6l12 12', 12))
       clear.addEventListener('click', (event) => {
         event.stopPropagation()
         clearSessionReminder(entry)

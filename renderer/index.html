@@ -10,9 +10,15 @@
   <div id="stage">
     <div id="sessions" class="sessions" hidden>
       <div class="sessions-head">
-        <div class="sessions-heading"><span class="sessions-mark"></span>会话状态<span id="sessionCount" class="sessions-count"></span></div>
+        <div class="sessions-title">
+          <span class="sessions-lights" aria-hidden="true"><i class="done"></i><i class="waiting"></i><i class="failed"></i></span>
+          <span class="sessions-title-text">会话状态</span>
+          <span id="sessionCount" class="sessions-count">0</span>
+        </div>
         <div id="sessionBar" class="session-bar" hidden></div>
-        <button id="sessionsToggle" class="sessions-toggle" type="button" title="收起/展开">⌄</button>
+        <button id="sessionsToggle" class="sessions-icon-btn" type="button" title="收起" aria-label="收起会话状态">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
       </div>
       <div id="sessionToast" class="session-toast" hidden></div>
       <div id="sessionList" class="session-list"></div>
