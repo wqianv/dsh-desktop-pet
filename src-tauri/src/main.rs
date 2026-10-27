@@ -30,6 +30,17 @@ use objc2_foundation::NSData;
 
 const DEFAULT_FRAMES: [u32; 9] = [6, 8, 8, 4, 5, 8, 6, 6, 6];
 
+/// 会话状态面板当前占用的逻辑高度（0 = 隐藏/折叠到没有）。
+static OVERLAY_HEIGHT: OnceLock<Mutex<f64>> = OnceLock::new();
+
+fn overlay_height() -> f64 {
+    OVERLAY_HEIGHT
+        .get_or_init(|| Mutex::new(0.0))
+        .lock()
+        .map(|value| *value)
+        .unwrap_or(0.0)
+}
+
 /* ------------------------------------------------------------------ */
 /* 配置                                                               */
 /* ------------------------------------------------------------------ */
@@ -641,6 +652,10 @@ struct SessionView {
     tool_family: Option<String>,
     active: bool,
     last_event_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reminder: Option<String>,
+    #[serde(default)]
+    attention_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -842,6 +857,8 @@ fn reduce_session(session_id: &str, events: &[Value], now: u64) -> SessionView {
         tool_family: tool.as_deref().map(tool_family).map(str::to_string),
         active,
         last_event_at,
+        reminder: None,
+        attention_at: 0,
     }
 }
 
@@ -1483,6 +1500,65 @@ fn set_ignore(window: WebviewWindow, ignore: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn set_overlay_height(app: AppHandle, height: f64) -> Result<(), String> {
+    let height = height.clamp(0.0, 420.0);
+    let state = OVERLAY_HEIGHT.get_or_init(|| Mutex::new(0.0));
+    let previous = {
+        let mut guard = state.lock().map_err(|e| e.to_string())?;
+        let old = *guard;
+        *guard = height;
+        old
+    };
+    if (previous - height).abs() < 0.5 {
+        return Ok(());
+    }
+    let Some(window) = app.get_webview_window("pet") else {
+        return Ok(());
+    };
+    let config = read_config();
+    let base_width = config.size as f64 * 192.0 / 208.0 + 96.0;
+    let base_height = config.size as f64 + 120.0;
+    let old_pos = window.outer_position().map_err(|e| e.to_string())?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    // set_size 后 outer_size 可能还是旧值；用逻辑高度差换算物理位移，保证窗口上沿向上长、底边不动。
+    let delta = height - previous;
+    window
+        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(base_width, base_height + height)))
+        .map_err(|e| e.to_string())?;
+    let new_y = old_pos.y - (delta * scale).round() as i32;
+    let _ = window.set_position(tauri::PhysicalPosition::new(old_pos.x, new_y));
+    log_msg(&format!(
+        "overlay: height={height:.1} delta={delta:.1} -> y={new_y} logical={}x{}",
+        base_width,
+        base_height + height
+    ));
+    Ok(())
+}
+
+#[tauri::command]
+fn ack_session(session_id: String) -> Result<(), String> {
+    let dir = settings_dir();
+    let _ = fs::create_dir_all(&dir);
+    let path = dir.join("acks.json");
+    let mut value = fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or_else(|| json!({}));
+    if !value.is_object() {
+        value = json!({});
+    }
+    if let Some(map) = value.as_object_mut() {
+        map.insert(session_id.clone(), json!(now_ms()));
+    }
+    let temp = path.with_extension("json.tmp");
+    fs::write(&temp, serde_json::to_string(&value).unwrap_or_else(|_| "{}".into()))
+        .map_err(|e| e.to_string())?;
+    fs::rename(&temp, &path).map_err(|e| e.to_string())?;
+    log_msg(&format!("session ack: {session_id}"));
+    Ok(())
+}
+
+#[tauri::command]
 fn start_drag(window: WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|e| e.to_string())
 }
@@ -1606,7 +1682,16 @@ fn spawn_hover_loop(window: WebviewWindow, pet_size: u32) {
 
                 let x = cur.x - pos.x as f64;
                 let y = cur.y - pos.y as f64;
-                Some(x >= left && x <= right && y >= top && y <= bottom)
+                let pet_hit = x >= left && x <= right && y >= top && y <= bottom;
+
+                // 上方状态面板也必须是可点击区域，否则点折叠/清除会穿透。
+                let panel_h = overlay_height() * scale;
+                let panel_hit = panel_h > 4.0
+                    && y >= 0.0
+                    && y <= panel_h + 18.0 * scale
+                    && x >= 8.0 * scale
+                    && x <= size.width as f64 - 8.0 * scale;
+                Some(pet_hit || panel_hit)
             })();
 
             if let Some(inside) = inside {
@@ -1802,6 +1887,8 @@ fn main() {
             frontend_ready,
             frontend_log,
             get_settings,
+            set_overlay_height,
+            ack_session,
             set_ignore,
             show_context_menu,
             start_drag,

@@ -58,6 +58,12 @@ const DEFAULT_FRAME_MS = 150
 const petEl = document.getElementById('pet')
 const bubbleEl = document.getElementById('bubble')
 const debugEl = document.getElementById('debug')
+const sessionsEl = document.getElementById('sessions')
+const sessionListEl = document.getElementById('sessionList')
+const sessionCountEl = document.getElementById('sessionCount')
+const sessionsCollapseBtn = document.getElementById('sessionsCollapse')
+const sessionsHideBtn = document.getElementById('sessionsHide')
+const sessionsClearBtn = document.getElementById('sessionsClear')
 
 let bootstrap = null
 let packs = []
@@ -80,6 +86,13 @@ let dragAnim = false
 let idleTimers = []
 const idlePlayed = new Set()
 let lastCostAt = 0
+const SESSION_MODE_KEY = 'dsh-pet-session-panel-mode'
+let sessionPanelMode = 'expanded'
+try { sessionPanelMode = localStorage.getItem(SESSION_MODE_KEY) || 'expanded' } catch {}
+let sessionSeen = new Set()
+let sessionSeenInit = false
+const sessionAcks = new Map()
+let lastOverlayHeight = 0
 
 /* ------------------------------------------------------------------ */
 /* 工具函数                                                           */
@@ -444,6 +457,182 @@ function endDragReaction() {
 }
 
 /* ------------------------------------------------------------------ */
+/* 会话状态面板（绿=完成 / 黄=等你回答 / 红=失败 / 蓝=运行中）         */
+/* ------------------------------------------------------------------ */
+
+function sessionKind(entry) {
+  if (!entry) return 'running'
+  if (entry.phase === 'waiting' || entry.reminder === 'waiting') return 'waiting'
+  if (entry.phase === 'failed' || entry.reminder === 'failed') return 'failed'
+  if (entry.phase === 'done' || entry.reminder === 'done') return 'done'
+  return 'running'
+}
+
+function sessionLabel(entry) {
+  switch (sessionKind(entry)) {
+    case 'done': return '完成'
+    case 'waiting': return '等你回答'
+    case 'failed': return '出错'
+    default: return entry && entry.active ? '运行中' : '进行中'
+  }
+}
+
+function sessionReminderKey(entry) {
+  return entry && entry.reminder ? `${entry.sessionId}:${entry.attentionAt || 0}` : null
+}
+
+function panelEntries(current) {
+  const sessions = Array.isArray(current.sessions) ? current.sessions : []
+  return sessions.filter((entry) => {
+    const acked = sessionAcks.get(entry.sessionId)
+    if (entry.reminder && acked && acked >= Number(entry.attentionAt || 0)) return false
+    return Boolean(entry && entry.sessionId)
+  }).slice(0, 7)
+}
+
+function persistPanelMode() {
+  try { localStorage.setItem(SESSION_MODE_KEY, sessionPanelMode) } catch {}
+}
+
+function applyOverlayHeight(height) {
+  if (!window.petAPI || !window.petAPI.setOverlayHeight) return
+  const next = Math.max(0, Math.round(height))
+  if (next === lastOverlayHeight) return
+  lastOverlayHeight = next
+  window.petAPI.setOverlayHeight(next).catch(() => {})
+}
+
+function scheduleOverlayHeight() {
+  requestAnimationFrame(() => {
+    if (!sessionsEl || sessionsEl.hidden) {
+      applyOverlayHeight(0)
+      return
+    }
+    const height = sessionsEl.getBoundingClientRect().height
+    applyOverlayHeight(height + 12)
+  })
+}
+
+async function clearSessionReminder(entry) {
+  if (!entry || !entry.reminder || entry.phase === 'waiting') return
+  sessionAcks.set(entry.sessionId, Date.now())
+  renderSessionPanel(state)
+  if (window.petAPI && window.petAPI.ackSession) {
+    try { await window.petAPI.ackSession(entry.sessionId) } catch {}
+  }
+}
+
+async function clearFinishedReminders() {
+  const entries = panelEntries(state).filter((entry) => entry.reminder && entry.phase !== 'waiting')
+  if (!entries.length) return
+  const at = Date.now()
+  for (const entry of entries) sessionAcks.set(entry.sessionId, at)
+  renderSessionPanel(state)
+  if (window.petAPI && window.petAPI.ackSession) {
+    for (const entry of entries) {
+      try { await window.petAPI.ackSession(entry.sessionId) } catch {}
+    }
+  }
+}
+
+function renderSessionPanel(current) {
+  if (!sessionsEl || !sessionListEl) return
+  const entries = panelEntries(current || {})
+  const reminderKeys = entries.map(sessionReminderKey).filter(Boolean)
+  if (!sessionSeenInit) {
+    sessionSeenInit = true
+    for (const key of reminderKeys) sessionSeen.add(key)
+  } else {
+    const hasNewReminder = reminderKeys.some((key) => !sessionSeen.has(key))
+    for (const key of reminderKeys) sessionSeen.add(key)
+    if (hasNewReminder) {
+      // 用户隐藏面板后，新完成的会话/新的提问会自动重新弹出。
+      sessionPanelMode = 'expanded'
+      persistPanelMode()
+    }
+  }
+
+  if (!entries.length) {
+    sessionsEl.hidden = true
+    sessionsEl.classList.remove('collapsed')
+    scheduleOverlayHeight()
+    return
+  }
+
+  if (sessionPanelMode === 'hidden') {
+    sessionsEl.hidden = true
+    scheduleOverlayHeight()
+    return
+  }
+
+  sessionsEl.hidden = false
+  sessionsEl.classList.toggle('collapsed', sessionPanelMode === 'collapsed')
+  const clearable = entries.some((entry) => entry.reminder && entry.phase !== 'waiting')
+  sessionsEl.classList.toggle('has-done', clearable)
+  sessionCountEl.textContent = String(entries.length)
+
+  sessionListEl.textContent = ''
+  for (const entry of entries) {
+    const kind = sessionKind(entry)
+    const row = document.createElement('div')
+    row.className = 'session-row'
+
+    const dot = document.createElement('span')
+    dot.className = `session-dot ${kind}`
+    row.appendChild(dot)
+
+    const title = document.createElement('span')
+    title.className = 'session-title'
+    title.textContent = entry.title || '未命名会话'
+    title.title = entry.title || entry.sessionId || ''
+    row.appendChild(title)
+
+    const label = document.createElement('span')
+    label.className = 'session-state'
+    label.textContent = sessionLabel(entry)
+    row.appendChild(label)
+
+    if (entry.reminder && entry.phase !== 'waiting') {
+      const clear = document.createElement('button')
+      clear.className = 'session-clear'
+      clear.type = 'button'
+      clear.title = '清掉这条提醒'
+      clear.textContent = '×'
+      clear.addEventListener('click', (event) => {
+        event.stopPropagation()
+        clearSessionReminder(entry)
+      })
+      row.appendChild(clear)
+    }
+    sessionListEl.appendChild(row)
+  }
+  scheduleOverlayHeight()
+}
+
+if (sessionsCollapseBtn) {
+  sessionsCollapseBtn.addEventListener('click', () => {
+    sessionPanelMode = sessionPanelMode === 'collapsed' ? 'expanded' : 'collapsed'
+    persistPanelMode()
+    renderSessionPanel(state)
+  })
+}
+if (sessionsHideBtn) {
+  sessionsHideBtn.addEventListener('click', () => {
+    sessionPanelMode = 'hidden'
+    // 隐藏时把当前提醒标记为已看到，避免下一次状态刷新又自动弹出来。
+    for (const entry of panelEntries(state)) {
+      const key = sessionReminderKey(entry)
+      if (key) sessionSeen.add(key)
+    }
+    persistPanelMode()
+    renderSessionPanel(state)
+  })
+}
+if (sessionsClearBtn) {
+  sessionsClearBtn.addEventListener('click', () => { clearFinishedReminders() })
+}
+
+/* ------------------------------------------------------------------ */
 /* 状态更新                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -466,6 +655,7 @@ function onState(next) {
     showBubbleForPhase(state)
   }
   maybeShowCost(prev, state)
+  renderSessionPanel(state)
 }
 
 function updateDebug() {
@@ -623,6 +813,7 @@ async function boot() {
   }
   applyPack(pack)
   showBubbleForPhase(state)
+  renderSessionPanel(state)
 
   window.petAPI.onState(onState)
   if (window.petAPI.onPack) {

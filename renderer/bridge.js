@@ -25,6 +25,14 @@
 
     getSettings: () => invoke('get_settings'),
 
+    setOverlayHeight(height) {
+      return invoke('set_overlay_height', { height })
+    },
+
+    ackSession(sessionId) {
+      return invoke('ack_session', { sessionId })
+    },
+
     setPack(packId) {
       return invoke('set_pack', { packId })
     },

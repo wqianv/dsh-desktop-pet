@@ -21,6 +21,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT = path.resolve(HERE, '..')
 const STATE_DIR = path.join(os.homedir(), '.dsh-desktop-pet')
 const STATE_FILE = path.join(STATE_DIR, 'state.json')
+const ACK_FILE = path.join(STATE_DIR, 'acks.json')
 const SETTINGS_FILE = path.join(STATE_DIR, 'settings.json')
 const ICON_DIR = path.join(STATE_DIR, 'icons')
 
@@ -576,6 +577,8 @@ export function apply(ctx) {
         toolFamily: null,
         active: false,
         lastEventAt: 0,
+        reminder: null,
+        attentionAt: 0,
         turn: 0,
         depth: 0,
         liveBuckets: zeroBuckets(),
@@ -645,27 +648,78 @@ export function apply(ctx) {
     return balancePromise
   }
 
+  function readAcks() {
+    try {
+      const value = JSON.parse(readFileSync(ACK_FILE, 'utf8'))
+      return value && typeof value === 'object' ? value : {}
+    } catch {
+      return {}
+    }
+  }
+
   function snapshot(now) {
+    const acks = readAcks()
     const all = [...sessions.values()]
       .filter((session) => session.lastEventAt > 0)
       .map((session) => ({ ...session }))
 
-    // 与 Rust 侧一致：非活跃终态按时间回落。
+    // 活跃 phase 超时回落；但 done/failed 的提醒标记保留，直到用户清掉。
     for (const session of all) {
       const age = now - session.lastEventAt
       if (!session.active && session.phase === 'done' && age > 8000) session.phase = 'idle'
       if (!session.active && session.phase === 'failed' && age > 15000) session.phase = 'idle'
       if (!session.active && session.phase === 'thinking' && age > 15000) session.phase = 'idle'
+      if (session.reminder && acks[session.id] && Number(acks[session.id]) >= Number(session.attentionAt || 0)) {
+        session.reminder = null
+      }
     }
 
-    all.sort((a, b) => {
-      const p = (PHASE_PRIORITY[b.phase] ?? 0) - (PHASE_PRIORITY[a.phase] ?? 0)
+    const livePhases = new Set(['thinking', 'tool', 'waiting', 'review'])
+    const entries = []
+    for (const session of all) {
+      const reminder = session.reminder && ['done', 'failed', 'waiting'].includes(session.reminder)
+        ? session.reminder
+        : null
+      const live = session.active || livePhases.has(session.phase)
+      if (!live && !reminder) continue
+      const phase = reminder || session.phase
+      entries.push({
+        sessionId: session.id,
+        title: session.title,
+        phase,
+        toolFamily: session.toolFamily,
+        active: Boolean(session.active),
+        lastEventAt: session.lastEventAt,
+        reminder,
+        attentionAt: session.attentionAt || 0,
+        live,
+      })
+    }
+
+    const priority = (entry) => {
+      if (entry.reminder === 'waiting' || entry.phase === 'waiting') return 100
+      if (entry.reminder === 'failed' || entry.phase === 'failed') return 90
+      if (entry.reminder === 'done' || entry.phase === 'done') return 80
+      if (entry.phase === 'tool') return 60
+      if (entry.phase === 'thinking') return 50
+      if (entry.phase === 'review') return 40
+      return 0
+    }
+    entries.sort((a, b) => {
+      const p = priority(b) - priority(a)
       if (p !== 0) return p
       return b.lastEventAt - a.lastEventAt
     })
 
-    const activeCount = all.filter((s) => s.active || s.phase === 'waiting' || s.phase === 'failed').length
-    const display = all[0]
+    // 桌宠本体只跟 live 状态，reminder 不能让它永远停在 done/failed。
+    const liveEntries = entries.filter((entry) => entry.live && entry.phase !== 'done' && entry.phase !== 'failed')
+    liveEntries.sort((a, b) => {
+      const p = priority(b) - priority(a)
+      if (p !== 0) return p
+      return b.lastEventAt - a.lastEventAt
+    })
+    const display = liveEntries[0]
+    const activeCount = liveEntries.length
     const costs = all
       .map((s) => s.cost)
       .filter(Boolean)
@@ -676,13 +730,15 @@ export function apply(ctx) {
       phase: display ? display.phase : 'idle',
       toolFamily: display ? display.toolFamily : null,
       activeCount,
-      sessions: all.slice(0, 8).map((s) => ({
-        sessionId: s.id,
+      sessions: entries.slice(0, 7).map((s) => ({
+        sessionId: s.sessionId,
         title: s.title,
         phase: s.phase,
         toolFamily: s.toolFamily,
         active: s.active,
         lastEventAt: s.lastEventAt,
+        reminder: s.reminder,
+        attentionAt: s.attentionAt,
       })),
       ...(costs.length ? { cost: costs[0] } : {}),
       account,
@@ -781,6 +837,8 @@ export function apply(ctx) {
         view.turn = typeof data.turn === 'number' ? data.turn : view.turn
         view.phase = 'thinking'
         view.toolFamily = null
+        view.reminder = null
+        view.attentionAt = 0
         view.liveBuckets = zeroBuckets()
         clearIdleTimer(view)
         break
@@ -799,6 +857,7 @@ export function apply(ctx) {
         view.active = true
         view.phase = toolName === 'ask_user_question' ? 'waiting' : 'tool'
         view.toolFamily = toolFamily(toolName)
+        if (view.reminder === 'waiting') view.reminder = null
         break
       }
       case 'tool/result':
@@ -807,20 +866,26 @@ export function apply(ctx) {
           view.phase = 'thinking'
           view.toolFamily = null
         }
+        if (view.reminder === 'waiting') view.reminder = null
         break
       case 'approval/asked':
         view.phase = 'waiting'
         view.toolFamily = null
+        view.reminder = 'waiting'
+        view.attentionAt = at
         break
       case 'approval/decided':
         view.phase = view.active ? 'thinking' : 'idle'
         view.toolFamily = null
+        if (view.reminder === 'waiting') view.reminder = null
         break
       case 'turn/end': {
         const kind = data.reason && data.reason.kind
         view.active = false
         view.toolFamily = null
         view.phase = kind === 'completed' ? 'done' : 'failed'
+        view.reminder = view.phase
+        view.attentionAt = at
         const turn = typeof data.turn === 'number' ? data.turn : view.turn
         scheduleIdle(view, view.phase === 'done' ? 8000 : 15000, view.phase)
         computeCost(view, turn, at)

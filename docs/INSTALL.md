@@ -1,6 +1,6 @@
 # DSH 桌宠 · 首次安装与使用指南（macOS）
 
-> 适用版本：**v0.1.2 beta**（Apple Silicon / arm64）
+> 适用版本：**v0.2.0 beta**（Apple Silicon / arm64）
 >
 > 这是一个「装在 macOS 桌面上的桌宠」，不是 DSH 窗口里的挂件。  
 > **推荐下载 `.pkg` 安装包**：双击 → 安装，安装器会自动放好 app、形象、DSH 插件并重启 DSH。  
@@ -13,7 +13,7 @@
 下载：
 
 ```
-DSH-Desktop-Pet-v0.1.2-macos-arm64.pkg
+DSH-Desktop-Pet-v0.2.0-macos-arm64.pkg
 ```
 
 1. **双击** pkg。
@@ -56,7 +56,7 @@ Install DSH Pet.command
 
 - [ ] 你是 **Apple Silicon（M1/M2/M3/M4）Mac**
 - [ ] 已经安装并登录 **DeepSeek Harness（DSH）**
-- [ ] 下载了 `DSH-Desktop-Pet-v0.1.2-macos-arm64.pkg`，或 `.zip`
+- [ ] 下载了 `DSH-Desktop-Pet-v0.2.0-macos-arm64.pkg`，或 `.zip`
 - [ ] 如果用 zip：知道解压后的文件夹放在哪（建议 `~/Applications`）
 
 > 不需要安装 Rust / Xcode / Node——这是给普通用户的安装包。  
@@ -69,7 +69,7 @@ Install DSH Pet.command
 双击 zip 解压，会得到一个文件夹：
 
 ```
-DSH-Desktop-Pet-v0.1.2-macos-arm64/
+DSH-Desktop-Pet-v0.2.0-macos-arm64/
 ├── DSH Pet.app          ← 桌宠本体
 ├── pets/                ← 自带形象
 ├── dsh-launcher/        ← DSH 插件
@@ -81,7 +81,7 @@ DSH-Desktop-Pet-v0.1.2-macos-arm64/
 把整个文件夹拖到一个**以后不会随手删的位置**，例如：
 
 ```
-~/Applications/DSH-Desktop-Pet-v0.1.2-macos-arm64/
+~/Applications/DSH-Desktop-Pet-v0.2.0-macos-arm64/
 ```
 
 ✅ **检查点**：文件夹里有 `DSH Pet.app`、`pets`、`dsh-launcher` 三样东西。  
@@ -112,8 +112,8 @@ v0.1 还没有 Apple 签名/公证，macOS 第一次会拦住它。**只需要�
 
 ```bash
 xattr -dr com.apple.quarantine \
-  "$HOME/Applications/DSH-Desktop-Pet-v0.1.2-macos-arm64/DSH Pet.app"
-open "$HOME/Applications/DSH-Desktop-Pet-v0.1.2-macos-arm64/DSH Pet.app"
+  "$HOME/Applications/DSH-Desktop-Pet-v0.2.0-macos-arm64/DSH Pet.app"
+open "$HOME/Applications/DSH-Desktop-Pet-v0.2.0-macos-arm64/DSH Pet.app"
 ```
 
 ✅ **检查点**：能看到一只桌宠出现在屏幕右下角。  
@@ -212,7 +212,7 @@ bash scripts/doctor.sh
 ### 2. 双击 app 提示「无法打开，因为无法验证开发者」
 
 回到第 2 步：右键 → 打开，或系统设置 → 隐私与安全性 → 仍要打开。  
-这是 v0.1.2 未公证导致的，正式签名版不会有。
+这是 v0.2.0 未公证导致的，正式签名版不会有。
 
 ### 3. DSH 设置里没有「桌宠」页面
 

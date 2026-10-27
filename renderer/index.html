@@ -8,6 +8,17 @@
 </head>
 <body>
   <div id="stage">
+    <div id="sessions" class="sessions" hidden>
+      <div class="sessions-head">
+        <div class="sessions-heading"><span class="sessions-mark"></span>会话状态<span id="sessionCount" class="sessions-count"></span></div>
+        <div class="sessions-actions">
+          <button id="sessionsCollapse" class="sessions-btn" type="button" title="折叠">–</button>
+          <button id="sessionsHide" class="sessions-btn" type="button" title="隐藏">×</button>
+        </div>
+      </div>
+      <div id="sessionList" class="session-list"></div>
+      <div class="sessions-foot"><button id="sessionsClear" class="sessions-clear" type="button">清空已完结提醒</button></div>
+    </div>
     <div id="bubble" class="bubble" hidden></div>
     <div id="pet" class="pet" title=""></div>
     <div id="debug" class="debug" hidden></div>
