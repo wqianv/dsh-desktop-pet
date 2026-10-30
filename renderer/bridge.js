@@ -43,6 +43,10 @@
       }
     },
 
+    openSession(sessionId) {
+      return invoke('open_session', { sessionId })
+    },
+
     onWalk(callback) {
       if (listen) {
         listen('pet:walk', (event) => callback(event.payload)).catch(() => {})

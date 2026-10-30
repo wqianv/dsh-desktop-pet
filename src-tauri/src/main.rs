@@ -1565,6 +1565,27 @@ fn toggle_setting(app: &AppHandle, key: &str) {
 }
 
 #[tauri::command]
+fn open_session(session_id: String) -> Result<(), String> {
+    if session_id.is_empty() {
+        return Err("empty session id".into());
+    }
+    let dir = settings_dir();
+    let _ = fs::create_dir_all(&dir);
+    let path = dir.join("open-session.json");
+    let temp = dir.join("open-session.json.tmp");
+    let payload = json!({
+        "sessionId": session_id,
+        "at": now_ms(),
+    });
+    fs::write(&temp, serde_json::to_string(&payload).unwrap_or_else(|_| "{}".into()))
+        .map_err(|e| e.to_string())?;
+    fs::rename(&temp, &path).map_err(|e| e.to_string())?;
+    log_msg(&format!("open session: {session_id}"));
+    open_dsh_app();
+    Ok(())
+}
+
+#[tauri::command]
 fn show_context_menu(window: WebviewWindow) -> Result<(), String> {
     log_msg("show_context_menu invoked");
     let settings = read_settings();
@@ -2014,6 +2035,7 @@ fn main() {
             ack_session,
             set_ignore,
             show_context_menu,
+            open_session,
             start_drag,
             hide_pet,
             quit_app,

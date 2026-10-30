@@ -200,6 +200,7 @@ body {
 
 .session-list { padding: 0 6px 4px; }
 .session-row {
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;

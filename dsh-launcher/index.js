@@ -22,6 +22,7 @@ const PROJECT = path.resolve(HERE, '..')
 const STATE_DIR = path.join(os.homedir(), '.dsh-desktop-pet')
 const STATE_FILE = path.join(STATE_DIR, 'state.json')
 const ACK_FILE = path.join(STATE_DIR, 'acks.json')
+const OPEN_SESSION_FILE = path.join(STATE_DIR, 'open-session.json')
 const SETTINGS_FILE = path.join(STATE_DIR, 'settings.json')
 const ICON_DIR = path.join(STATE_DIR, 'icons')
 
@@ -518,6 +519,24 @@ function registerPetApi(ctx) {
       if (req.method !== 'GET') return jsonResponse(res, 405, { ok: false })
       const packs = listPacks()
       return jsonResponse(res, 200, { ok: true, packs, active: activePackId(packs) })
+    },
+  })
+
+  web.register({
+    kind: 'exact',
+    path: '/dsh-pet/api/open-session',
+    handler: async (req, res) => {
+      if (!allow(req)) return jsonResponse(res, 403, { ok: false, error: 'forbidden' })
+      if (req.method !== 'GET') return jsonResponse(res, 405, { ok: false })
+      try {
+        const text = readFileSync(OPEN_SESSION_FILE, 'utf8')
+        rmSync(OPEN_SESSION_FILE, { force: true })
+        const parsed = JSON.parse(text)
+        const sessionId = typeof parsed.sessionId === 'string' ? parsed.sessionId : null
+        return jsonResponse(res, 200, { ok: true, sessionId })
+      } catch {
+        return jsonResponse(res, 200, { ok: true, sessionId: null })
+      }
     },
   })
 

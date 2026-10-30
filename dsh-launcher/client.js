@@ -319,7 +319,7 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
         h('div', { className: `pet-status${error ? ' pet-err' : ''}` }, error || message))
     }
 
-    const inject = ['slots']
+    const inject = ['slots', 'uiWorkspace']
     function apply(ctx) {
       ctx.effect(
         () => ctx.slots.inject('settings.section', () =>
@@ -329,6 +329,25 @@ if (window.__DSH_DESKTOP_PET_CLIENT_BOOTED__) {
           ), 'dsh-desktop-pet: settings section'),
         'dsh-desktop-pet: settings section',
       )
+
+      // 桌宠点击某条会话 → 通过本机 pending 文件让 DSH 打开对应会话。
+      // 只在 DSH UI 活着时轮询；频率 700ms，成本可忽略。
+      const openPendingSession = async () => {
+        try {
+          const response = await fetch(`${API}/open-session`, { headers: { accept: 'application/json' } })
+          const json = await response.json().catch(() => ({}))
+          if (!json || !json.sessionId) return
+          const workspace = ctx.get('uiWorkspace')
+          if (workspace && typeof workspace.openSession === 'function') {
+            workspace.openSession(json.sessionId)
+          }
+        } catch {
+          /* DSH 未启动/路由未就绪时忽略 */
+        }
+      }
+      const pollTimer = setInterval(openPendingSession, 700)
+      openPendingSession()
+      ctx.effect(() => () => clearInterval(pollTimer), 'dsh-desktop-pet: open session poll')
     }
 
     exports.apply = apply

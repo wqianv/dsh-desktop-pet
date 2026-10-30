@@ -641,6 +641,13 @@ function renderSessionPanel(current) {
     title.className = 'session-title'
     title.textContent = entry.title || '未命名会话'
     title.title = entry.title || entry.sessionId || ''
+    row.title = '点击在 DSH 中打开这个会话'
+    row.addEventListener('click', (event) => {
+      if (event.target && event.target.closest && event.target.closest('.session-clear')) return
+      if (window.petAPI && window.petAPI.openSession) {
+        window.petAPI.openSession(entry.sessionId).catch(() => {})
+      }
+    })
     row.appendChild(title)
 
     const label = document.createElement('span')
